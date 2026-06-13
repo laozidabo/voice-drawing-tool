@@ -148,43 +148,52 @@ class DrawingCanvas:
         put_chinese_text(self._cached_bottom_bar, "输入指令", (hint_x + 4, 13), 12, (135, 125, 120))
 
         grid = np.zeros((self.HEIGHT, total_w, 3), dtype=np.uint8)
-        grid_col = (225, 228, 232)
+        grid_col = (218, 222, 226)
+        cell_w = self.WIDTH // 5
+        cell_h = self.HEIGHT // 5
         for row in range(1, 6):
-            gy = row * (self.HEIGHT // 5)
+            gy = row * cell_h
             cv2.line(grid, (0, gy), (total_w, gy), grid_col, 1)
         for col in range(1, 6):
-            gx = col * (self.WIDTH // 5)
+            gx = col * cell_w
             cv2.line(grid, (gx, 0), (gx, self.HEIGHT), grid_col, 1)
-        dot_col = (200, 204, 208)
+        dot_col = (195, 200, 205)
         for row in range(1, 6):
-            gy = row * (self.HEIGHT // 5)
+            gy = row * cell_h
             for col in range(1, 6):
-                gx = col * (self.WIDTH // 5)
-                cv2.circle(grid, (gx, gy), 3, dot_col, -1, cv2.LINE_AA)
+                gx = col * cell_w
+                cv2.circle(grid, (gx, gy), 3, dot_col, -1)
 
-        def _label_bg(g, x, y, w, h, col=(60, 55, 55)):
-            cv2.rectangle(g, (x - 1, y - 1), (x + w + 1, y + h + 1), col, -1)
+        def _label_bg(g, x, y, w, h):
+            cv2.rectangle(g, (x, y), (x + w, y + h), (55, 55, 58), -1)
 
-        label_col = (150, 150, 155)
-        for x_val in range(0, self.WIDTH + 1, 200):
-            _label_bg(grid, x_val + 1, self.HEIGHT - 18, 34, 14)
-            put_chinese_text(grid, str(x_val), (x_val + 2, self.HEIGHT - 16), 12, label_col)
-        for y_val in range(0, self.HEIGHT + 1, 100):
-            if y_val == 0:
-                continue
-            _label_bg(grid, 1, y_val + 6, 34, 14)
-            put_chinese_text(grid, str(y_val), (3, y_val + 8), 12, label_col)
-        zone_col = (185, 185, 190)
-        for (px, py), label in {
-            (8, 6): "左上", (total_w // 2 - 10, 6): "上中", (total_w - 52, 6): "右上",
-            (8, self.HEIGHT // 2 - 10): "左中", (total_w // 2 - 10, self.HEIGHT // 2 - 10): "正中",
-            (total_w - 52, self.HEIGHT // 2 - 10): "右中",
-            (8, self.HEIGHT - 28): "左下", (total_w // 2 - 10, self.HEIGHT - 28): "下中",
-            (total_w - 52, self.HEIGHT - 28): "右下",
-        }.items():
-            _label_bg(grid, px - 2, py - 2, 44, 18)
-            put_chinese_text(grid, label, (px, py), 13, zone_col)
-        cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (200, 204, 208), 1)
+        label_col = (165, 168, 175)
+        # X coordinate labels at grid column positions (skip x=800—right edge)
+        for i in range(5):
+            x_val = i * cell_w
+            _label_bg(grid, x_val + 2, self.HEIGHT - 22, 32, 14)
+            put_chinese_text(grid, str(x_val), (x_val + 4, self.HEIGHT - 20), 11, label_col)
+        # Y coordinate labels at grid row positions (skip 600—bottom edge)
+        for i in range(1, 5):
+            y_val = i * cell_h
+            _label_bg(grid, 2, y_val + 8, 32, 14)
+            put_chinese_text(grid, str(y_val), (4, y_val + 10), 11, label_col)
+
+        zone_col = (175, 178, 185)
+        zone_w = total_w // 3
+        zone_h = self.HEIGHT // 3
+        zone_labels = {
+            (0, 0): "左上", (1, 0): "上中", (2, 0): "右上",
+            (0, 1): "左中", (1, 1): "正中", (2, 1): "右中",
+            (0, 2): "左下", (1, 2): "下中", (2, 2): "右下",
+        }
+        for (gcol, grow), label in zone_labels.items():
+            cx = gcol * zone_w + zone_w // 2
+            cy = grow * zone_h + zone_h // 2
+            _label_bg(grid, cx - 22, cy - 10, 44, 20)
+            put_chinese_text(grid, label, (cx - 16, cy - 7), 13, zone_col)
+        cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (195, 200, 205), 1)
+        cv2.rectangle(grid, (0, 0), (total_w - 1, self.HEIGHT - 1), (185, 190, 195), 1)
         self._cached_grid = grid
 
     def _save_state(self):
@@ -390,7 +399,7 @@ class DrawingCanvas:
 
         if self._cached_grid is not None:
             canvas_roi = v[BAR_H:BAR_H + self.HEIGHT, :]
-            mask = np.any(self._cached_grid > 0, axis=2)
+            mask = np.any(self._cached_grid > 40, axis=2)
             canvas_roi[mask] = self._cached_grid[mask]
 
         if is_listening:
