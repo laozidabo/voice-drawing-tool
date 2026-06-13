@@ -59,28 +59,12 @@ _FONT_CACHE: dict = {}
 
 
 def put_chinese_text(img, text, position, font_size=20, color=(255, 255, 255)):
-    """Render Chinese text onto an OpenCV image using PIL.
-
-    Args:
-        img: numpy array (OpenCV image, BGR)
-        text: string to render (supports Chinese)
-        position: (x, y) top-left position
-        font_size: font size in pixels
-        color: (B, G, R) color tuple
-    Returns:
-        img with text rendered on it
-    """
     if not _PIL_AVAILABLE or not _ZH_FONT_PATH:
-        # Fallback: use cv2.putText (ASCII only)
         cv2.putText(img, text, position, cv2.FONT_HERSHEY_SIMPLEX,
                     font_size / 30.0, color, 1, cv2.LINE_AA)
         return img
 
-    # Convert BGR to RGB for PIL
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(img_rgb)
-    draw = ImageDraw.Draw(pil_img)
-
+    h, w = img.shape[:2]
     try:
         key = (_ZH_FONT_PATH, font_size)
         if key not in _FONT_CACHE:
@@ -89,13 +73,28 @@ def put_chinese_text(img, text, position, font_size=20, color=(255, 255, 255)):
     except Exception:
         font = ImageFont.load_default()
 
-    # PIL uses RGB, OpenCV uses BGR
-    rgb_color = (color[2], color[1], color[0])
-    draw.text(position, text, font=font, fill=rgb_color)
+    dummy = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+    bbox = dummy.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    x, y = position
+    x1 = max(0, x)
+    y1 = max(0, y)
+    x2 = min(w, x + tw + 2)
+    y2 = min(h, y + th + 2)
+    if x2 <= x1 or y2 <= y1:
+        return img
 
-    # Convert back to BGR for OpenCV
-    result = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    np.copyto(img, result)
+    roi = img[y1:y2, x1:x2].copy()
+    roi_rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+    pil_roi = Image.fromarray(roi_rgb)
+    draw = ImageDraw.Draw(pil_roi)
+
+    rgb_color = (color[2], color[1], color[0])
+    draw.text((x - x1, y - y1), text, font=font, fill=rgb_color)
+
+    result = cv2.cvtColor(np.array(pil_roi), cv2.COLOR_RGB2BGR)
+    img[y1:y2, x1:x2] = result
     return img
 
 
@@ -146,39 +145,46 @@ class DrawingCanvas:
         cv2.line(self._cached_bottom_bar, (stats_x - 8, 6), (stats_x - 8, BAR_H - 6), ACCENT_LINE, 1)
         hint_x = total_w - 160
         cv2.line(self._cached_bottom_bar, (hint_x - 8, 6), (hint_x - 8, BAR_H - 6), ACCENT_LINE, 1)
-        put_chinese_text(self._cached_bottom_bar, "输入指令", (hint_x + 4, 14), 11, (135, 125, 120))
+        put_chinese_text(self._cached_bottom_bar, "输入指令", (hint_x + 4, 13), 12, (135, 125, 120))
 
         grid = np.zeros((self.HEIGHT, total_w, 3), dtype=np.uint8)
-        grid_col = (237, 240, 242)
+        grid_col = (225, 228, 232)
         for row in range(1, 6):
             gy = row * (self.HEIGHT // 5)
             cv2.line(grid, (0, gy), (total_w, gy), grid_col, 1)
         for col in range(1, 6):
             gx = col * (self.WIDTH // 5)
             cv2.line(grid, (gx, 0), (gx, self.HEIGHT), grid_col, 1)
-        dot_col = (220, 222, 225)
+        dot_col = (200, 204, 208)
         for row in range(1, 6):
             gy = row * (self.HEIGHT // 5)
             for col in range(1, 6):
                 gx = col * (self.WIDTH // 5)
-                cv2.circle(grid, (gx, gy), 2, dot_col, -1, cv2.LINE_AA)
-        label_col = (180, 180, 185)
+                cv2.circle(grid, (gx, gy), 3, dot_col, -1, cv2.LINE_AA)
+
+        def _label_bg(g, x, y, w, h, col=(60, 55, 55)):
+            cv2.rectangle(g, (x - 1, y - 1), (x + w + 1, y + h + 1), col, -1)
+
+        label_col = (150, 150, 155)
         for x_val in range(0, self.WIDTH + 1, 200):
-            put_chinese_text(grid, str(x_val), (x_val + 2, self.HEIGHT - 4), 9, label_col)
+            _label_bg(grid, x_val + 1, self.HEIGHT - 18, 34, 14)
+            put_chinese_text(grid, str(x_val), (x_val + 2, self.HEIGHT - 16), 12, label_col)
         for y_val in range(0, self.HEIGHT + 1, 100):
             if y_val == 0:
                 continue
-            put_chinese_text(grid, str(y_val), (2, y_val + 10), 9, label_col)
-        zone_col = (200, 200, 205)
+            _label_bg(grid, 1, y_val + 6, 34, 14)
+            put_chinese_text(grid, str(y_val), (3, y_val + 8), 12, label_col)
+        zone_col = (185, 185, 190)
         for (px, py), label in {
-            (0, 0): "左上", (total_w // 2, 0): "上中", (total_w - 40, 0): "右上",
-            (0, self.HEIGHT // 2): "左中", (total_w // 2 - 10, self.HEIGHT // 2): "正中",
-            (total_w - 40, self.HEIGHT // 2): "右中",
-            (0, self.HEIGHT - 20): "左下", (total_w // 2 - 10, self.HEIGHT - 20): "下中",
-            (total_w - 40, self.HEIGHT - 20): "右下",
+            (8, 6): "左上", (total_w // 2 - 10, 6): "上中", (total_w - 52, 6): "右上",
+            (8, self.HEIGHT // 2 - 10): "左中", (total_w // 2 - 10, self.HEIGHT // 2 - 10): "正中",
+            (total_w - 52, self.HEIGHT // 2 - 10): "右中",
+            (8, self.HEIGHT - 28): "左下", (total_w // 2 - 10, self.HEIGHT - 28): "下中",
+            (total_w - 52, self.HEIGHT - 28): "右下",
         }.items():
-            put_chinese_text(grid, label, (px + 5, py + 5), 11, zone_col)
-        cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (215, 218, 222), 1)
+            _label_bg(grid, px - 2, py - 2, 44, 18)
+            put_chinese_text(grid, label, (px, py), 13, zone_col)
+        cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (200, 204, 208), 1)
         self._cached_grid = grid
 
     def _save_state(self):
@@ -450,8 +456,8 @@ class DrawingCanvas:
         hh, mm = divmod(mm, 60)
         dur_str = f"{hh}:{mm:02d}:{ss:02d}" if hh > 0 else f"{mm:02d}:{ss:02d}"
         stats_x = total_w - 310
-        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, by + 14), 11, BAR_TEXT_DIM)
-        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, by + 14), 11, BAR_TEXT_DIM)
+        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, by + 13), 12, BAR_TEXT_DIM)
+        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, by + 13), 12, BAR_TEXT_DIM)
 
         cx, cy_ = int(self.cursor_x), int(self.cursor_y)
         canvas_cy = cy_ + BAR_H
