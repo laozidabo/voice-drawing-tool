@@ -167,17 +167,17 @@ class DrawingCanvas:
         def _label_bg(g, x, y, w, h):
             cv2.rectangle(g, (x, y), (x + w, y + h), (55, 55, 58), -1)
 
-        label_col = (165, 168, 175)
+        label_col = (175, 180, 185)
         # X coordinate labels at grid column positions (skip x=800—right edge)
         for i in range(5):
             x_val = i * cell_w
-            _label_bg(grid, x_val + 2, self.HEIGHT - 22, 32, 14)
-            put_chinese_text(grid, str(x_val), (x_val + 4, self.HEIGHT - 20), 11, label_col)
+            _label_bg(grid, x_val + 4, self.HEIGHT - 26, 38, 18)
+            put_chinese_text(grid, str(x_val), (x_val + 6, self.HEIGHT - 24), 13, label_col)
         # Y coordinate labels at grid row positions (skip 600—bottom edge)
         for i in range(1, 5):
             y_val = i * cell_h
-            _label_bg(grid, 2, y_val + 8, 32, 14)
-            put_chinese_text(grid, str(y_val), (4, y_val + 10), 11, label_col)
+            _label_bg(grid, 6, y_val + 6, 38, 18)
+            put_chinese_text(grid, str(y_val), (8, y_val + 8), 13, label_col)
 
         zone_col = (175, 178, 185)
         zone_w = total_w // 3
@@ -965,7 +965,8 @@ class VoiceDrawingApp:
         print("[输入] 键盘输入已启用，可直接在终端输入指令")
 
         if self.gui:
-            cv2.namedWindow(self.WINDOW_NAME)
+            cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(self.WINDOW_NAME, 800, 668)
             cv2.setMouseCallback(self.WINDOW_NAME, self._on_mouse)
             print("[GUI] 绘图窗口已创建")
             print("\n" + "="*60)
