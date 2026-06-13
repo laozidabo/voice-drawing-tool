@@ -202,6 +202,30 @@ If running in a headless environment (SSH, container, WSL without display), use:
 python -m voice_drawing_tool --no-gui
 ```
 
+## 第三方依赖与原创声明
+
+### 依赖清单
+
+| 依赖 | 用途 | 许可证 |
+|------|------|--------|
+| numpy | 画布矩阵运算 | BSD |
+| opencv-python | 窗口系统、图形渲染、图像处理 | Apache 2.0 |
+| Pillow | 中文文本渲染（PIL） | Historical |
+| pypinyin | 拼音模糊匹配（同音字纠错） | MIT |
+| faster-whisper | 离线语音识别（small 模型） | MIT |
+| SpeechRecognition（可选） | Google STT 语音识别回退 | BSD |
+| pyaudio（可选） | 麦克风音频采集 | MIT |
+
+### 原创功能说明
+
+本作品为自主开发，原创功能包括：
+
+- **命令解析引擎**：基于 Command Pattern + 正则匹配的自然语言绘图指令解析，支持 20+ 图形命令、颜色模糊匹配（difflib）、场景分解（CompositeCommand）
+- **拼音纠错**：基于 pypinyin + 编辑距离的中文同音字模糊匹配
+- **中文 UI 覆盖层**：OpenCV 原生渲染的顶部/底部状态栏、5×5 网格、9 宫格标签、坐标标注
+- **画布引擎**：基于 numpy 的撤销/重做历史栈、实时光标渲染、辉光效果
+- **离线语音流水线**：faster-whisper + 防幻觉过滤 + 领域词汇 prompt 优化
+
 ## License
 
-Part of the Qiniu Cloud 2026 competition project by Suki.
+Part of the Qiniu Cloud 2026 competition (题目二：AI 语音绘图工具) project by laozidabo.
