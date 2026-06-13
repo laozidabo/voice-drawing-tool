@@ -1101,7 +1101,7 @@ class VoiceDrawingApp:
         cv2.rectangle(overlay, (w // 2 - 220, h // 2 - 50), (w // 2 + 220, h // 2 + 50), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)
         remaining = int(5.0 - (time.time() - self._pending_confirm_time))
-        put_chinese_text(img, f"说'确认'清空画布 ({remaining}秒)",
+        put_chinese_text(img, f"按回车清空画布 ({remaining}秒)",
                         (w // 2 - 200, h // 2 + 5), 22, (100, 180, 255))
 
     def _on_mouse(self, event, x, y, flags, param):
@@ -1190,8 +1190,23 @@ class VoiceDrawingApp:
                         else:
                             self.cmd_queue.put(stripped)
                     else:
-                        # 空行 = 确认待执行的语音命令
-                        if self._pending_speech_cmd:
+                        # 空行 = 确认待执行的语音命令 或 待确认的销毁操作
+                        if self._pending_confirm:
+                            action = self._pending_confirm
+                            self._pending_confirm = None
+                            self._pending_confirm_time = 0.0
+                            if action == "清空":
+                                self.canvas.clear()
+                                self._cmd_count += 1
+                                cv2.imwrite('/tmp/voice_drawing_autosave.png', self.canvas.image)
+                                self._set_feedback("✓ 画布已清空")
+                                print(f"[确认] 画布已清空")
+                            elif action == "撤销":
+                                self.canvas.undo()
+                                self._cmd_count += 1
+                                self._set_feedback("↩ 已撤销")
+                                print(f"[确认] 已撤销")
+                        elif self._pending_speech_cmd:
                             self.cmd_queue.put(self._pending_speech_cmd)
                             print(f"[确认] 执行: \"{self._pending_speech_cmd}\"")
                             self._pending_speech_cmd = None
@@ -1284,27 +1299,17 @@ class VoiceDrawingApp:
         # Confirmation for destructive commands
         from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, DrawFreehandCommand, RepeatLastWithVariationCommand
         if isinstance(cmd, ClearCanvasCommand):
-            now = time.time()
-            if self._pending_confirm == "清空" and now - self._pending_confirm_time < 5.0:
-                self._pending_confirm = None
-                self._pending_confirm_time = 0.0
-            else:
-                self._pending_confirm = "清空"
-                self._pending_confirm_time = now
-                self._set_feedback("⚠ 说'确认'清空画布 (5秒内)")
-                return
+            self._pending_confirm = "清空"
+            self._pending_confirm_time = time.time()
+            self._set_feedback("⚠ 按回车清空画布")
+            return
         elif isinstance(cmd, UndoCommand):
-            if not self._check_confirm("撤销"):
-                return
+            self._pending_confirm = "撤销"
+            self._pending_confirm_time = time.time()
+            self._set_feedback("⚠ 按回车撤销 (5秒内)")
+            return
         elif isinstance(cmd, ConfirmCommand):
-            if self._pending_confirm == "清空" and time.time() - self._pending_confirm_time < 5.0:
-                self._pending_confirm = None
-                self._pending_confirm_time = 0.0
-                self.canvas.clear()
-                self._cmd_count += 1
-                cv2.imwrite('/tmp/voice_drawing_autosave.png', self.canvas.image)
-                self._set_feedback("🎤 确认 → 画布已清空")
-                return
+            pass  # no longer used; Enter key handles confirmation
         result = cmd.execute(self.canvas)
         self._cmd_count += 1
         print(f"[执行] {result}")
