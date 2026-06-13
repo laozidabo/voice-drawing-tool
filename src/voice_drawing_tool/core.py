@@ -399,8 +399,12 @@ class DrawingCanvas:
 
         if self._cached_grid is not None:
             canvas_roi = v[BAR_H:BAR_H + self.HEIGHT, :]
-            mask = np.any(self._cached_grid > 40, axis=2)
-            canvas_roi[mask] = self._cached_grid[mask]
+            grid = self._cached_grid
+            line_mask = np.all(grid > 190, axis=2)
+            label_mask = np.any(grid > 40, axis=2) & ~line_mask
+            blended = cv2.addWeighted(canvas_roi, 0.3, grid, 0.7, 0)
+            canvas_roi[line_mask] = blended[line_mask]
+            canvas_roi[label_mask] = grid[label_mask]
 
         if is_listening:
             status_col = (50, 200, 80)
@@ -413,7 +417,15 @@ class DrawingCanvas:
         y = 0
         last_speech = getattr(self, '_last_speech_text', '')
         if last_speech:
-            put_chinese_text(v, f"🎤 {last_speech}"[:30], (138, 14), 13, (120, 200, 255))
+            speech_str = f"🎤 {last_speech}"
+            max_w = 380 - 138
+            w = 0
+            for i, ch in enumerate(speech_str):
+                w += 18 if ord(ch) > 127 else 9
+                if w > max_w:
+                    speech_str = speech_str[:i] + "…"
+                    break
+            put_chinese_text(v, speech_str, (138, 14), 13, (120, 200, 255))
 
         put_chinese_text(v, f"({int(self.cursor_x)},{int(self.cursor_y)})",
                         (388, 16), 12, BAR_TEXT_DIM)
@@ -430,21 +442,27 @@ class DrawingCanvas:
         cv2.putText(v, f"w:{self.pen_width}", (sx + 78, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.38, BAR_TEXT_DIM, 1, cv2.LINE_AA)
 
         by = total_h - BAR_H
+        if is_listening:
+            cv2.rectangle(v, (0, by), (4, total_h), (50, 200, 80), -1)
+        else:
+            cv2.rectangle(v, (0, by), (4, total_h), BAR_TEXT_DIM, -1)
         dot_x, dot_cy = 18, by + BAR_H // 2
         if is_listening:
-            cv2.circle(v, (dot_x, dot_cy), 7, (40, 180, 80), -1, cv2.LINE_AA)
-            cv2.circle(v, (dot_x, dot_cy), 7, (80, 220, 110), 2, cv2.LINE_AA)
-            put_chinese_text(v, "聆听中", (dot_x + 14, by + 14), 13, (100, 220, 130))
+            cv2.circle(v, (dot_x, dot_cy), 8, (40, 180, 80), -1, cv2.LINE_AA)
+            cv2.circle(v, (dot_x, dot_cy), 8, (80, 220, 110), 2, cv2.LINE_AA)
+            put_chinese_text(v, "聆听中", (dot_x + 16, by + 14), 13, (100, 220, 130))
         else:
-            cv2.circle(v, (dot_x, dot_cy), 4, BAR_TEXT_DIM, -1, cv2.LINE_AA)
+            cv2.circle(v, (dot_x, dot_cy), 5, BAR_TEXT_DIM, -1, cv2.LINE_AA)
             put_chinese_text(v, "待命", (dot_x + 14, by + 14), 13, BAR_TEXT_DIM)
 
         if feedback_text:
             fb = feedback_text[:60]
-            fb_w = 8 + sum(18 if '一' <= ch <= '鿿' else 9 for ch in fb)
-            if fb_w > total_w - 200:
-                fb_w = total_w - 200
-            fb_x, fb_y, fb_h = 100, by + 6, BAR_H - 12
+            fb_w = 8 + sum(18 if ord(ch) > 127 else 9 for ch in fb)
+            fb_x = 100
+            max_fb_w = (total_w - 310) - fb_x - 8
+            if fb_w > max_fb_w:
+                fb_w = max_fb_w
+            fb_y, fb_h = by + 6, BAR_H - 12
             cv2.rectangle(v, (fb_x, fb_y), (fb_x + fb_w, fb_y + fb_h), (40, 35, 35), -1)
             cv2.rectangle(v, (fb_x, fb_y), (fb_x + fb_w, fb_y + fb_h), (50, 45, 45), 1)
             if feedback_text.startswith('⚠'):
@@ -492,18 +510,21 @@ class DrawingCanvas:
             v[y1g:y2g, x1g:x2g] = roi
 
         cur_len, gap = 25, 7
-        sh_col = (210, 213, 218)
-        cv2.line(v, (cx - cur_len + 1, canvas_cy + 1), (cx - gap + 1, canvas_cy + 1), sh_col, 1)
-        cv2.line(v, (cx + gap + 1, canvas_cy + 1), (cx + cur_len + 1, canvas_cy + 1), sh_col, 1)
-        cv2.line(v, (cx + 1, canvas_cy - cur_len + 1), (cx + 1, canvas_cy - gap + 1), sh_col, 1)
-        cv2.line(v, (cx + 1, canvas_cy + gap + 1), (cx + 1, canvas_cy + cur_len + 1), sh_col, 1)
-        cv2.line(v, (cx - cur_len, canvas_cy), (cx - gap, canvas_cy), cur_col, 2, cv2.LINE_AA)
-        cv2.line(v, (cx + gap, canvas_cy), (cx + cur_len, canvas_cy), cur_col, 2, cv2.LINE_AA)
-        cv2.line(v, (cx, canvas_cy - cur_len), (cx, canvas_cy - gap), cur_col, 2, cv2.LINE_AA)
-        cv2.line(v, (cx, canvas_cy + gap), (cx, canvas_cy + cur_len), cur_col, 2, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 3, cur_col, -1, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 10, self.pen_color, 2, cv2.LINE_AA)
-        put_chinese_text(v, f"({cx},{cy_})", (cx + 14, canvas_cy - 8), 10, cur_col)
+        white = (255, 255, 255)
+        def _cross(ox, oy, thick, col):
+            cv2.line(v, (cx - cur_len + ox, canvas_cy + oy), (cx - gap + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
+            cv2.line(v, (cx + gap + ox, canvas_cy + oy), (cx + cur_len + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
+            cv2.line(v, (cx + ox, canvas_cy - cur_len + oy), (cx + ox, canvas_cy - gap + oy), col, thick, cv2.LINE_AA)
+            cv2.line(v, (cx + ox, canvas_cy + gap + oy), (cx + ox, canvas_cy + cur_len + oy), col, thick, cv2.LINE_AA)
+        _cross(0, 0, 3, white)
+        _cross(0, 0, 1, cur_col)
+        cv2.circle(v, (cx, canvas_cy), 4, white, -1, cv2.LINE_AA)
+        cv2.circle(v, (cx, canvas_cy), 2, cur_col, -1, cv2.LINE_AA)
+        cv2.circle(v, (cx, canvas_cy), 11, white, 3, cv2.LINE_AA)
+        cv2.circle(v, (cx, canvas_cy), 10, self.pen_color, 1, cv2.LINE_AA)
+        put_chinese_text(v, f"({cx},{cy_})", (cx + 16, canvas_cy - 10), 10, cur_col)
+        # white bg behind coord text for readability
+        put_chinese_text(v, f"({cx},{cy_})", (cx + 15, canvas_cy - 9), 10, white)
 
         return v
 
