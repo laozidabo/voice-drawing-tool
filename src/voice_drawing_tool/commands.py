@@ -171,6 +171,10 @@ _ZH_EN_MAP = {
     '开花': 'grow flower', '开朵花': 'grow flower', '开花了': 'grow flower',
     '长成大树': 'grow tree', '长树': 'grow tree', '长出一棵树': 'grow tree',
     '萤火虫': 'fireflies', '放萤火虫': 'fireflies',
+    '烟花': 'fireworks', '放烟花': 'fireworks', '放个烟花': 'fireworks',
+    '闪烁': 'sparkle', '闪一下': 'sparkle', '闪闪': 'sparkle', '闪': 'sparkle',
+    '魔法阵': 'magic circle', '魔法': 'magic circle', '画魔法阵': 'magic circle',
+    '流星': 'starfall', '流星雨': 'starfall', '放流星': 'starfall',
     '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
 }
 
@@ -1876,6 +1880,11 @@ class CommandParser:
             (r"grow\s+tree", lambda m: GrowTreeCommand()),
             (r"firefl(?:y|ies)", lambda m: StartFirefliesCommand()),
             (r"stop\s+animation", lambda m: StopAllAnimationsCommand()),
+            (r"fireworks", lambda m: FireworksCommand()),
+            (r"sparkle", lambda m: SparkleCommand()),
+            (r"magic\s+circle", lambda m: MagicCircleCommand()),
+            (r"starfall", lambda m: StartStarfallCommand()),
+            (r"stop\s+starfall", lambda m: StopStarfallCommand()),
         ]
 
     def _parse_single(self, text: str) -> Optional[Command]:
@@ -2476,3 +2485,54 @@ class StopAllAnimationsCommand(Command):
         return f"⏹ 停止了 {count} 个动画"
     def get_description(self) -> str:
         return "stop all animations"
+
+
+# ─── Phase 3: Particle Magic Commands ────────────────────────────────────────
+
+class FireworksCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import FireworksAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(FireworksAnimation(cx, cy))
+        return "🎆 砰！"
+    def get_description(self) -> str:
+        return "fireworks at cursor"
+
+class SparkleCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import SparkleAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(SparkleAnimation(cx, cy))
+        return "✨ 闪闪发光"
+    def get_description(self) -> str:
+        return "sparkle effect at cursor"
+
+class MagicCircleCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import MagicCircleAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(MagicCircleAnimation(cx, cy, canvas.pen_color))
+        return "🔮 魔法阵"
+    def get_description(self) -> str:
+        return "magic circle at cursor"
+
+class StartStarfallCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import StarfallAnimation
+        canvas.anim_mgr.add(StarfallAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "🌠 流星划过"
+    def get_description(self) -> str:
+        return "start starfall effect"
+
+class StopStarfallCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import StarfallAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, StarfallAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"☄ 流星停了 (removed {before - after})"
+    def get_description(self) -> str:
+        return "stop starfall effect"
