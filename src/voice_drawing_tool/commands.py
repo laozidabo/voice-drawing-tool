@@ -171,7 +171,15 @@ _ZH_EN_MAP = {
     '开花': 'grow flower', '开朵花': 'grow flower', '开花了': 'grow flower',
     '长成大树': 'grow tree', '长树': 'grow tree', '长出一棵树': 'grow tree',
     '萤火虫': 'fireflies', '放萤火虫': 'fireflies',
+    '烟花': 'fireworks', '放烟花': 'fireworks', '放个烟花': 'fireworks',
+    '闪烁': 'sparkle', '闪一下': 'sparkle', '闪闪': 'sparkle', '闪': 'sparkle',
+    '魔法阵': 'magic circle', '魔法': 'magic circle', '画魔法阵': 'magic circle',
+    '流星': 'starfall', '流星雨': 'starfall', '放流星': 'starfall',
     '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
+    '声控画笔': 'voice brush', '语音画笔': 'voice brush', '声音画笔': 'voice brush',
+    '声控': 'voice brush', '语音笔刷': 'voice brush',
+    '取消声控': 'stop voice brush', '关闭声控': 'stop voice brush',
+    '无声控': 'stop voice brush', '停止声控': 'stop voice brush',
 }
 
 _SPEECH_FIX_MAP = {
@@ -1876,6 +1884,13 @@ class CommandParser:
             (r"grow\s+tree", lambda m: GrowTreeCommand()),
             (r"firefl(?:y|ies)", lambda m: StartFirefliesCommand()),
             (r"stop\s+animation", lambda m: StopAllAnimationsCommand()),
+            (r"fireworks", lambda m: FireworksCommand()),
+            (r"sparkle", lambda m: SparkleCommand()),
+            (r"magic\s+circle", lambda m: MagicCircleCommand()),
+            (r"starfall", lambda m: StartStarfallCommand()),
+            (r"stop\s+starfall", lambda m: StopStarfallCommand()),
+            (r"voice\s?brush", lambda m: VoiceBrushCommand()),
+            (r"stop\s+voice\s?brush", lambda m: StopVoiceBrushCommand()),
         ]
 
     def _parse_single(self, text: str) -> Optional[Command]:
@@ -2225,13 +2240,8 @@ class CommandParser:
                 if any(kw in description for kw in shape_keywords):
                     return SceneDescriptionCommand(description)
 
-        # 拼音模糊匹配：暂时禁用（太激进，破坏复合词如"椭圆"→"朵圆"）
-        # TODO: 修复拼音匹配器，只匹配单字同音错误，不拆分复合词
-        # try:
-        #     from .pinyin_matcher import pinyin_replace_unknown
-        #     text = pinyin_replace_unknown(text, list(_ZH_EN_ALL.keys()))
-        # except Exception:
-        #     pass
+        # 拼音模糊匹配：在直接匹配失败后，用拼音近似度匹配
+        # 注意：不在翻译前替换文本，避免破坏已知复合词
         text_en = zh_to_en(text)
         multi = self._parse_multi(text_en)
         if multi:
@@ -2242,12 +2252,59 @@ class CommandParser:
         cmd = self._parse_single(text_en)
         if cmd:
             return cmd
+        # 拼音模糊匹配：用原始中文文本做拼音近似匹配
+        cmd = self._pinyin_fallback(text)
+        if cmd:
+            return cmd
         cmd = self._fuzzy_fallback(text_en)
         if cmd:
             return cmd
 
         # --- Did-you-mean suggestions ---
         return self._suggest(text_en)
+
+    def _pinyin_fallback(self, text: str) -> Optional[Command]:
+        """拼音模糊匹配：当直接解析失败时，用拼音编辑距离匹配已知中文命令。"""
+        if not text or not any('\u4e00' <= ch <= '\u9fff' for ch in text):
+            return None
+        try:
+            from .pinyin_matcher import _to_pinyin, _edit_distance
+        except Exception:
+            return None
+        # 构建拼音索引（首次调用时缓存）
+        if not hasattr(self, '_pinyin_index'):
+            self._pinyin_index = {}
+            for zh in _ZH_EN_ALL:
+                try:
+                    py = _to_pinyin(zh)
+                    if py:
+                        self._pinyin_index[zh] = py
+                except Exception:
+                    continue
+        text_py = _to_pinyin(text)
+        if not text_py:
+            return None
+        best_zh = None
+        best_dist = 3  # 最多允许 2 处拼音差异
+        for zh_cmd, cmd_py in self._pinyin_index.items():
+            if text_py == cmd_py:
+                best_zh = zh_cmd
+                best_dist = 0
+                break
+            dist = _edit_distance(text_py, cmd_py)
+            if dist < best_dist:
+                best_dist = dist
+                best_zh = zh_cmd
+        if best_zh and best_dist <= 2:
+            en = zh_to_en(best_zh) if best_zh in _ZH_EN_ALL else best_zh
+            cmd = self._parse_single(en)
+            if cmd:
+                return cmd
+            # 也尝试在模糊匹配上下文中使用
+            cmd = self._fuzzy_fallback(en)
+            if cmd:
+                return cmd
+        return None
 
     def _suggest(self, text_en: str) -> Optional[Command]:
         """Return a SuggestionCommand if close keyword matches are found."""
@@ -2434,3 +2491,69 @@ class StopAllAnimationsCommand(Command):
         return f"⏹ 停止了 {count} 个动画"
     def get_description(self) -> str:
         return "stop all animations"
+
+
+# ─── Phase 3: Particle Magic Commands ────────────────────────────────────────
+
+class FireworksCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import FireworksAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(FireworksAnimation(cx, cy))
+        return "🎆 砰！"
+    def get_description(self) -> str:
+        return "fireworks at cursor"
+
+class SparkleCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import SparkleAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(SparkleAnimation(cx, cy))
+        return "✨ 闪闪发光"
+    def get_description(self) -> str:
+        return "sparkle effect at cursor"
+
+class MagicCircleCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import MagicCircleAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(MagicCircleAnimation(cx, cy, canvas.pen_color))
+        return "🔮 魔法阵"
+    def get_description(self) -> str:
+        return "magic circle at cursor"
+
+class StartStarfallCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import StarfallAnimation
+        canvas.anim_mgr.add(StarfallAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "🌠 流星划过"
+    def get_description(self) -> str:
+        return "start starfall effect"
+
+class StopStarfallCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import StarfallAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, StarfallAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"☄ 流星停了 (removed {before - after})"
+    def get_description(self) -> str:
+        return "stop starfall effect"
+
+
+class VoiceBrushCommand(Command):
+    def execute(self, canvas) -> str:
+        canvas.voice_brush_mode = True
+        return "🎤 声控画笔已开启 — 大声画粗，小声画细"
+    def get_description(self) -> str:
+        return "enable voice-controlled brush width"
+
+class StopVoiceBrushCommand(Command):
+    def execute(self, canvas) -> str:
+        canvas.voice_brush_mode = False
+        return "🎤 声控画笔已关闭"
+    def get_description(self) -> str:
+        return "disable voice-controlled brush width"
