@@ -10,6 +10,9 @@ from typing import Optional, List, Dict
 os.environ.pop('WAYLAND_DISPLAY', None)
 os.environ['QT_QPA_PLATFORM'] = 'xcb'
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
+os.environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = '1'
+os.environ['QT_ENABLE_HIGHDPI_SCALING'] = '1'
+os.environ['QT_SCALE_FACTOR_ROUNDING_POLICY'] = 'PassThrough'
 
 try:
     import numpy as np
@@ -127,25 +130,16 @@ class DrawingCanvas:
     def _cache_static_ui(self):
         if self._cached_top_bar is not None:
             return
-        BAR_H = 34
+        BAR_H = 28
         total_w = self.WIDTH
-        total_h = self.HEIGHT + BAR_H * 2
         BAR_BG = (30, 25, 25)
         ACCENT_LINE = (50, 45, 45)
 
         self._cached_top_bar = np.full((BAR_H, total_w, 3), BAR_BG, dtype=np.uint8)
         cv2.line(self._cached_top_bar, (0, BAR_H - 1), (total_w, BAR_H - 1), ACCENT_LINE, 1)
-        put_chinese_text(self._cached_top_bar, "语音绘图", (14, 14), 16, (245, 240, 240))
-        for sep_x in (130, 380, 480, total_w - 200):
-            cv2.line(self._cached_top_bar, (sep_x, 8), (sep_x, BAR_H - 8), ACCENT_LINE, 1)
 
         self._cached_bottom_bar = np.full((BAR_H, total_w, 3), BAR_BG, dtype=np.uint8)
         cv2.line(self._cached_bottom_bar, (0, 0), (total_w, 0), ACCENT_LINE, 1)
-        stats_x = total_w - 310
-        cv2.line(self._cached_bottom_bar, (stats_x - 8, 6), (stats_x - 8, BAR_H - 6), ACCENT_LINE, 1)
-        hint_x = total_w - 160
-        cv2.line(self._cached_bottom_bar, (hint_x - 8, 6), (hint_x - 8, BAR_H - 6), ACCENT_LINE, 1)
-        put_chinese_text(self._cached_bottom_bar, "输入指令", (hint_x + 4, 13), 12, (135, 125, 120))
 
         grid = np.zeros((self.HEIGHT, total_w, 3), dtype=np.uint8)
         grid_col = (218, 222, 226)
@@ -164,38 +158,7 @@ class DrawingCanvas:
                 gx = col * cell_w
                 cv2.circle(grid, (gx, gy), 3, dot_col, -1)
 
-        def _label_bg(g, x, y, w, h):
-            cv2.rectangle(g, (x, y), (x + w, y + h), (55, 55, 58), -1)
-
         label_col = (175, 180, 185)
-        # X coordinate labels at grid column positions (skip x=800—right edge)
-        for i in range(5):
-            x_val = i * cell_w
-            _label_bg(grid, x_val + 4, self.HEIGHT - 26, 38, 18)
-            put_chinese_text(grid, str(x_val), (x_val + 6, self.HEIGHT - 24), 13, label_col)
-        # Y coordinate labels at grid row positions (skip 600—bottom edge)
-        for i in range(1, 5):
-            y_val = i * cell_h
-            _label_bg(grid, 6, y_val + 6, 38, 18)
-            put_chinese_text(grid, str(y_val), (8, y_val + 8), 13, label_col)
-
-        zone_col = (175, 178, 185)
-        zone_w = total_w // 3
-        zone_h = self.HEIGHT // 3
-        zone_labels = {
-            (0, 0): "左上", (1, 0): "上中", (2, 0): "右上",
-            (0, 1): "左中", (1, 1): "正中", (2, 1): "右中",
-            (0, 2): "左下", (1, 2): "下中", (2, 2): "右下",
-        }
-        for (gcol, grow), label in zone_labels.items():
-            cx = gcol * zone_w + zone_w // 2
-            cy = grow * zone_h + zone_h // 2
-            if label == "正中":
-                # Offset away from the default cursor position (canvas center)
-                # so it doesn't permanently collide with the crosshair.
-                cy -= 70
-            _label_bg(grid, cx - 22, cy - 10, 44, 20)
-            put_chinese_text(grid, label, (cx - 16, cy - 7), 13, zone_col)
         cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (195, 200, 205), 1)
         cv2.rectangle(grid, (0, 0), (total_w - 1, self.HEIGHT - 1), (185, 190, 195), 1)
         self._cached_grid = grid
@@ -378,23 +341,16 @@ class DrawingCanvas:
         cv2.imwrite(filename, self.image)
 
     def _get_cursor_glow(self):
-        if self._cached_glow is not None:
-            return self._cached_glow
-        w, h = 33, 33
-        glow = np.zeros((h, w, 3), dtype=np.uint8)
-        cv2.circle(glow, (16, 16), 16, (255, 190, 130), -1, cv2.LINE_AA)
-        self._cached_glow = glow
-        return glow
+        return None
 
     def get_preview(self, feedback_text: str = "", is_listening: bool = False,
                     cmd_count: int = 0, session_duration: float = 0.0) -> np.ndarray:
         self._cache_static_ui()
-        BAR_H = 34
+        BAR_H = 28
         total_h = self.HEIGHT + BAR_H * 2
         total_w = self.WIDTH
         BAR_TEXT = (245, 240, 240)
         BAR_TEXT_DIM = (135, 125, 120)
-        ACCENT_BLUE = (255, 130, 60)
         v = np.full((total_h, total_w, 3), (240, 240, 240), dtype=np.uint8)
 
         v[:BAR_H, :] = self._cached_top_bar
@@ -410,126 +366,109 @@ class DrawingCanvas:
             canvas_roi[line_mask] = blended[line_mask]
             canvas_roi[label_mask] = grid[label_mask]
 
-        if is_listening:
-            status_col = (50, 200, 80)
-        elif feedback_text.startswith('⚠'):
-            status_col = (60, 60, 220)
-        else:
-            status_col = ACCENT_BLUE
-        cv2.rectangle(v, (0, 0), (total_w, 3), status_col, -1)
-
-        y = 0
+        # --- Top bar (28px) ---
+        ty = 8  # text y-center for 13-14px font in 28px bar
+        put_chinese_text(v, "语音绘图", (10, ty), 14, BAR_TEXT)
+        sp_x = 110
         last_speech = getattr(self, '_last_speech_text', '')
         if last_speech:
             speech_str = f"🎤 {last_speech}"
-            max_w = 380 - 138
+            max_w = total_w - sp_x - 400
             w = 0
             for i, ch in enumerate(speech_str):
                 w += 18 if ord(ch) > 127 else 9
                 if w > max_w:
                     speech_str = speech_str[:i] + "…"
                     break
-            put_chinese_text(v, speech_str, (138, 14), 13, (120, 200, 255))
+            put_chinese_text(v, speech_str, (sp_x, ty), 13, (120, 200, 255))
 
+        # Right cluster: color swatch | name | width | coords | shapes
         put_chinese_text(v, f"({int(self.cursor_x)},{int(self.cursor_y)})",
-                        (388, 16), 12, BAR_TEXT_DIM)
-        put_chinese_text(v, f"形状:{self._shape_count}", (488, 16), 12, BAR_TEXT_DIM)
+                        (total_w - 330, ty), 12, BAR_TEXT_DIM)
+        put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 260, ty), 12, BAR_TEXT_DIM)
 
-        csx = total_w - 200
-        sx = csx + 12
-        cv2.rectangle(v, (sx, 8), (sx + 20, 26), self.pen_color, -1)
-        cv2.rectangle(v, (sx, 8), (sx + 20, 26), (180, 180, 190), 1)
-        if any('一' <= ch <= '鿿' for ch in str(self.pen_color_name)):
-            put_chinese_text(v, self.pen_color_name, (sx + 28, 13), 14, BAR_TEXT)
-        else:
-            cv2.putText(v, self.pen_color_name, (sx + 28, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.38, BAR_TEXT, 1, cv2.LINE_AA)
-        cv2.putText(v, f"w:{self.pen_width}", (sx + 78, 23), cv2.FONT_HERSHEY_SIMPLEX, 0.38, BAR_TEXT_DIM, 1, cv2.LINE_AA)
 
+
+        # --- Bottom bar (28px) ---
         by = total_h - BAR_H
-        if is_listening:
-            cv2.rectangle(v, (0, by), (4, total_h), (50, 200, 80), -1)
-        else:
-            cv2.rectangle(v, (0, by), (4, total_h), BAR_TEXT_DIM, -1)
-        dot_x, dot_cy = 18, by + BAR_H // 2
-        if is_listening:
-            cv2.circle(v, (dot_x, dot_cy), 8, (40, 180, 80), -1, cv2.LINE_AA)
-            cv2.circle(v, (dot_x, dot_cy), 8, (80, 220, 110), 2, cv2.LINE_AA)
-            put_chinese_text(v, "聆听中", (dot_x + 16, by + 14), 13, (100, 220, 130))
-        else:
-            cv2.circle(v, (dot_x, dot_cy), 5, BAR_TEXT_DIM, -1, cv2.LINE_AA)
-            put_chinese_text(v, "待命", (dot_x + 14, by + 14), 13, BAR_TEXT_DIM)
+        bty = by + 8  # text y in bottom bar
 
+        # Status indicator: 3px left strip
+        cv2.rectangle(v, (0, by), (3, total_h), (50, 200, 80) if is_listening else BAR_TEXT_DIM, -1)
+        # Status dot + text
+        dot_x, dot_cy = 16, by + BAR_H // 2
+        if is_listening:
+            cv2.circle(v, (dot_x, dot_cy), 6, (40, 180, 80), -1, cv2.LINE_AA)
+            cv2.circle(v, (dot_x, dot_cy), 6, (80, 220, 110), 2, cv2.LINE_AA)
+            put_chinese_text(v, "聆听中", (dot_x + 14, bty), 13, (100, 220, 130))
+        else:
+            cv2.circle(v, (dot_x, dot_cy), 4, BAR_TEXT_DIM, -1, cv2.LINE_AA)
+            put_chinese_text(v, "待命", (dot_x + 12, bty), 13, BAR_TEXT_DIM)
+
+        # Feedback text (centered region, before stats)
+        fb_x, fb_max = 110, total_w - 330
         if feedback_text:
             fb = feedback_text[:60]
             fb_w = 8 + sum(18 if ord(ch) > 127 else 9 for ch in fb)
-            fb_x = 100
-            max_fb_w = (total_w - 310) - fb_x - 8
-            if fb_w > max_fb_w:
-                fb_w = max_fb_w
-            fb_y, fb_h = by + 6, BAR_H - 12
-            cv2.rectangle(v, (fb_x, fb_y), (fb_x + fb_w, fb_y + fb_h), (40, 35, 35), -1)
-            cv2.rectangle(v, (fb_x, fb_y), (fb_x + fb_w, fb_y + fb_h), (50, 45, 45), 1)
+            if fb_w > fb_max - fb_x:
+                fb_w = fb_max - fb_x
+            fb_y, fb_h = by + 5, BAR_H - 10
+            fb_col = (230, 200, 100)
             if feedback_text.startswith('⚠'):
-                fb_col = (255, 140, 100); border_col = (200, 100, 80)
+                fb_col = (255, 140, 100)
             elif feedback_text.startswith('↩'):
-                fb_col = (140, 180, 255); border_col = (100, 140, 220)
+                fb_col = (140, 180, 255)
             elif feedback_text.startswith('🎤'):
-                fb_col = (80, 210, 110); border_col = (60, 180, 90)
+                fb_col = (80, 210, 110)
             elif feedback_text.startswith('💡'):
-                fb_col = (180, 220, 255); border_col = (140, 180, 220)
-            else:
-                fb_col = (230, 200, 100); border_col = (200, 170, 80)
-            cv2.rectangle(v, (fb_x, fb_y), (fb_x + fb_w, fb_y + fb_h), border_col, 1)
-            put_chinese_text(v, fb, (fb_x + 8, by + 14), 13, fb_col)
+                fb_col = (180, 220, 255)
+            put_chinese_text(v, fb, (fb_x, bty), 13, fb_col)
 
+        # Right: cmd count + duration
+        stats_x = total_w - 310
+        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, bty), 12, BAR_TEXT_DIM)
         dur = int(session_duration)
         mm, ss = divmod(dur, 60)
         hh, mm = divmod(mm, 60)
         dur_str = f"{hh}:{mm:02d}:{ss:02d}" if hh > 0 else f"{mm:02d}:{ss:02d}"
-        stats_x = total_w - 310
-        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, by + 13), 12, BAR_TEXT_DIM)
-        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, by + 13), 12, BAR_TEXT_DIM)
+        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, bty), 12, BAR_TEXT_DIM)
 
         cx, cy_ = int(self.cursor_x), int(self.cursor_y)
         canvas_cy = cy_ + BAR_H
         cur_col = (50, 45, 45)
-        glow_r = 16
         glow = self._get_cursor_glow()
-        x1g = max(0, cx - glow_r)
-        y1g = max(0, canvas_cy - glow_r)
-        x2g = min(total_w, cx + glow_r + 1)
-        y2g = min(total_h, canvas_cy + glow_r + 1)
-        if x2g > x1g and y2g > y1g:
-            roi = v[y1g:y2g, x1g:x2g].copy()
-            gx1 = cx - x1g
-            gy1 = canvas_cy - y1g
-            gx2 = gx1 + glow.shape[1]
-            gy2 = gy1 + glow.shape[0]
-            glow_roi = glow[max(0, -gx1):min(glow.shape[0], total_h - y1g),
-                            max(0, -gy1):min(glow.shape[1], total_w - x1g)]
-            mask_g = np.any(glow_roi > 0, axis=2)
-            if mask_g.any():
-                blended = cv2.addWeighted(roi, 0.75, 0, 0.25, 0)
-                np.copyto(roi, blended, where=mask_g[..., None])
-            v[y1g:y2g, x1g:x2g] = roi
+        if glow is not None:
+            glow_r = 16
+            x1g = max(0, cx - glow_r)
+            y1g = max(0, canvas_cy - glow_r)
+            x2g = min(total_w, cx + glow_r + 1)
+            y2g = min(total_h, canvas_cy + glow_r + 1)
+            if x2g > x1g and y2g > y1g:
+                roi = v[y1g:y2g, x1g:x2g].copy()
+                gx1 = cx - x1g
+                gy1 = canvas_cy - y1g
+                gx2 = gx1 + glow.shape[1]
+                gy2 = gy1 + glow.shape[0]
+                glow_roi = glow[max(0, -gx1):min(glow.shape[0], total_h - y1g),
+                                max(0, -gy1):min(glow.shape[1], total_w - x1g)]
+                mask_g = np.any(glow_roi > 0, axis=2)
+                if mask_g.any():
+                    blended = cv2.addWeighted(roi, 0.75, 0, 0.25, 0)
+                    np.copyto(roi, blended, where=mask_g[..., None])
+                v[y1g:y2g, x1g:x2g] = roi
 
-        cur_len, gap = 16, 5
+        cur_len, gap = 14, 4
         white = (255, 255, 255)
-        def _cross(ox, oy, thick, col):
-            cv2.line(v, (cx - cur_len + ox, canvas_cy + oy), (cx - gap + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
-            cv2.line(v, (cx + gap + ox, canvas_cy + oy), (cx + cur_len + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
-            cv2.line(v, (cx + ox, canvas_cy - cur_len + oy), (cx + ox, canvas_cy - gap + oy), col, thick, cv2.LINE_AA)
-            cv2.line(v, (cx + ox, canvas_cy + gap + oy), (cx + ox, canvas_cy + cur_len + oy), col, thick, cv2.LINE_AA)
-        _cross(0, 0, 2, white)
-        _cross(0, 0, 1, cur_col)
-        cv2.circle(v, (cx, canvas_cy), 3, white, -1, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 2, cur_col, -1, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 7, white, 2, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 6, self.pen_color, 1, cv2.LINE_AA)
-        # coordinate readout: white outline text for legibility on any background
+        def _arm(ox, oy, col):
+            cv2.line(v, (cx - cur_len + ox, canvas_cy + oy), (cx - gap + ox, canvas_cy + oy), col, 1, cv2.LINE_AA)
+            cv2.line(v, (cx + gap + ox, canvas_cy + oy), (cx + cur_len + ox, canvas_cy + oy), col, 1, cv2.LINE_AA)
+            cv2.line(v, (cx + ox, canvas_cy - cur_len + oy), (cx + ox, canvas_cy - gap + oy), col, 1, cv2.LINE_AA)
+            cv2.line(v, (cx + ox, canvas_cy + gap + oy), (cx + ox, canvas_cy + cur_len + oy), col, 1, cv2.LINE_AA)
+        _arm(1, 1, cur_col)
+        _arm(0, 0, white)
+        cv2.circle(v, (cx, canvas_cy), 2, self.pen_color, -1, cv2.LINE_AA)
         coord_txt = f"({cx},{cy_})"
-        put_chinese_text(v, coord_txt, (cx + 11, canvas_cy + 14), 10, white)
-        put_chinese_text(v, coord_txt, (cx + 12, canvas_cy + 15), 10, cur_col)
+        put_chinese_text(v, coord_txt, (cx + 12, canvas_cy + 16), 11, white)
 
         return v
 
@@ -1109,7 +1048,7 @@ class VoiceDrawingApp:
         """Handle mouse events for freehand drawing mode."""
         if not self.canvas._freehand_mode:
             return
-        BAR_H = 34
+        BAR_H = 28
         canvas_x = x
         canvas_y = y - BAR_H
         if canvas_x < 0 or canvas_x >= self.canvas.WIDTH or canvas_y < 0 or canvas_y >= self.canvas.HEIGHT:
