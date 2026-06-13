@@ -584,6 +584,21 @@ class BubblesAnimation(Animation):
         self._bubbles: List[dict] = []
         self._accum = 0.0
         self._pop_particles: List[dict] = []
+        # Seed bubbles at random visible heights for instant feedback
+        for _ in range(15):
+            age = random.uniform(0.5, 5.0)
+            self._bubbles.append({
+                'x': random.uniform(30, width - 30),
+                'y': random.uniform(40, height - 20),
+                'size': random.uniform(6, 22),
+                'speed': random.uniform(25, 60),
+                'hue': random.uniform(0.5, 0.85),
+                'wobble_amp': random.uniform(0.5, 1.5),
+                'wobble_freq': random.uniform(2.0, 4.0),
+                'phase': random.uniform(0, math.pi * 2),
+                'life': random.uniform(4.0, 8.0),
+                'age': age,
+            })
 
     def _spawn_pop(self, bx: float, by: float, hue: float):
         for _ in range(12):
@@ -600,8 +615,8 @@ class BubblesAnimation(Animation):
             })
 
     def update(self, dt: float, progress: float):
-        self._accum += dt * 3
-        while self._accum > 0 and len(self._bubbles) < 30:
+        self._accum += dt * 6
+        while self._accum > 0 and len(self._bubbles) < 35:
             self._accum -= 1
             x = random.uniform(30, self._w - 30)
             sz = random.uniform(6, 22)
