@@ -508,3 +508,270 @@ class StarfallAnimation(Animation):
             # Star head
             cv2.line(img, (xi - sz, yi), (xi + sz, yi), col, 1, cv2.LINE_AA)
             cv2.line(img, (xi, yi - sz), (xi, yi + sz), col, 1, cv2.LINE_AA)
+
+
+# ─── Phase 5: Premium Effects (quality over quantity) ────────────────────────
+
+class SnowAnimation(Animation):
+    def __init__(self, width: int, height: int):
+        super().__init__(duration=0, loop=True)
+        self._w, self._h = width, height
+        self._flakes: List[dict] = []
+        self._accum = 0.0
+        self._wind = 0.0
+
+    def update(self, dt: float, progress: float):
+        self._accum += dt * 18
+        self._wind += random.uniform(-8, 8) * dt
+        self._wind = max(-40, min(40, self._wind))
+        while self._accum > 0 and len(self._flakes) < 140:
+            self._accum -= 1
+            self._flakes.append({
+                'x': random.uniform(-20, self._w + 20),
+                'y': random.uniform(-30, -5),
+                'size': random.uniform(1.5, 4.5),
+                'speed': random.uniform(40, 90),
+                'sway_amp': random.uniform(15, 45),
+                'sway_freq': random.uniform(1.2, 3.0),
+                'phase': random.uniform(0, math.pi * 2),
+                'opacity': random.uniform(0.6, 1.0),
+                'life': random.uniform(4.0, 10.0),
+                'age': 0.0,
+            })
+        alive = []
+        for f in self._flakes:
+            f['age'] += dt
+            sway = math.sin(f['age'] * f['sway_freq'] + f['phase']) * f['sway_amp']
+            f['x'] += self._wind * dt + sway * 0.3 * dt
+            f['y'] += f['speed'] * dt
+            if f['age'] < f['life'] and f['y'] < self._h + 10 and f['x'] > -40 and f['x'] < self._w + 40:
+                alive.append(f)
+        self._flakes = alive
+
+    def render(self, img: np.ndarray, progress: float):
+        h, w = img.shape[:2]
+        for f in self._flakes:
+            xi, yi = int(f['x']), int(f['y'])
+            if not (-5 <= xi < w + 5 and -5 <= yi < h + 5):
+                continue
+            life_p = f['age'] / f['life']
+            fade = f['opacity']
+            if life_p < 0.1:
+                fade *= life_p / 0.1
+            if life_p > 0.85:
+                fade *= (1 - life_p) / 0.15
+            sz = f['size']
+            icol = int(255 * fade)
+            col = (icol, icol, icol)
+            # Glow (soft outer halo)
+            gsz = int(sz * 3)
+            if gsz > 0:
+                cv2.circle(img, (xi, yi), gsz, (icol // 3, icol // 3, icol // 3), -1, cv2.LINE_AA)
+            # Core
+            csz = max(1, int(sz))
+            cv2.circle(img, (xi, yi), csz, col, -1, cv2.LINE_AA)
+            # Bright highlight
+            if sz > 2.5:
+                cv2.circle(img, (xi - 1, yi - 1), max(1, csz - 1),
+                           (min(255, icol + 40), min(255, icol + 40), min(255, icol + 40)),
+                           -1, cv2.LINE_AA)
+
+
+class BubblesAnimation(Animation):
+    def __init__(self, width: int, height: int):
+        super().__init__(duration=0, loop=True)
+        self._w, self._h = width, height
+        self._bubbles: List[dict] = []
+        self._accum = 0.0
+        self._pop_particles: List[dict] = []
+
+    def _spawn_pop(self, bx: float, by: float, hue: float):
+        for _ in range(12):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(30, 80)
+            self._pop_particles.append({
+                'x': bx, 'y': by,
+                'vx': speed * math.cos(angle),
+                'vy': speed * math.sin(angle),
+                'life': random.uniform(0.2, 0.5),
+                'age': 0.0,
+                'size': random.uniform(1.5, 3),
+                'hue': hue + random.uniform(-0.1, 0.1),
+            })
+
+    def update(self, dt: float, progress: float):
+        self._accum += dt * 3
+        while self._accum > 0 and len(self._bubbles) < 30:
+            self._accum -= 1
+            x = random.uniform(30, self._w - 30)
+            sz = random.uniform(6, 22)
+            self._bubbles.append({
+                'x': x,
+                'y': self._h + sz,
+                'size': sz,
+                'speed': random.uniform(25, 60),
+                'hue': random.uniform(0.5, 0.85),
+                'wobble_amp': random.uniform(0.5, 1.5),
+                'wobble_freq': random.uniform(2.0, 4.0),
+                'phase': random.uniform(0, math.pi * 2),
+                'life': random.uniform(4.0, 8.0),
+                'age': 0.0,
+            })
+        for b in self._bubbles:
+            b['age'] += dt
+            if b['age'] >= b['life']:
+                self._spawn_pop(b['x'], b['y'], b['hue'])
+        self._bubbles = [b for b in self._bubbles if b['age'] < b['life']]
+        # Update pop particles
+        dead_pop = []
+        for p in self._pop_particles:
+            p['x'] += p['vx'] * dt
+            p['y'] += p['vy'] * dt
+            p['age'] += dt
+            if p['age'] >= p['life']:
+                dead_pop.append(p)
+        for p in dead_pop:
+            self._pop_particles.remove(p)
+
+    def _hsv_to_bgr(self, hue: float, sat: float, val: float):
+        h = hue * 180
+        s = int(sat * 255)
+        v = int(val * 255)
+        hi = int(h / 30) % 6
+        f = h / 30 - hi
+        p = v * (1 - s / 255)
+        q = v * (1 - f * s / 255)
+        t = v * (1 - (1 - f) * s / 255)
+        if hi == 0:
+            return (v, t, p)
+        if hi == 1:
+            return (q, v, p)
+        if hi == 2:
+            return (p, v, t)
+        if hi == 3:
+            return (p, q, v)
+        if hi == 4:
+            return (t, p, v)
+        return (v, p, q)
+
+    def render(self, img: np.ndarray, progress: float):
+        h, w = img.shape[:2]
+        overlay = img.copy()
+        # Render bubbles
+        for b in self._bubbles:
+            xi, yi = int(b['x']), int(b['y'])
+            if not (0 <= xi < w and 0 <= yi < h):
+                continue
+            life_p = b['age'] / b['life']
+            fade = 1.0
+            if life_p < 0.05:
+                fade = life_p / 0.05
+            if life_p > 0.9:
+                fade = (1 - life_p) / 0.1
+            r = int(b['size'])
+            wobble = math.sin(b['age'] * b['wobble_freq'] + b['phase']) * b['wobble_amp']
+            yi += int(wobble)
+            # Body color (iridescent)
+            hue_shift = math.sin(b['age'] * 0.5) * 0.08
+            col = self._hsv_to_bgr(b['hue'] + hue_shift, 0.25, 1.0)
+            col = tuple(int(c * fade) for c in col)
+            # Main circle (translucent via overlay)
+            cv2.circle(overlay, (xi, yi), r, col, -1, cv2.LINE_AA)
+            # Rim highlight
+            rim_col = (min(255, col[0] + 80), min(255, col[1] + 80), min(255, col[2] + 80))
+            cv2.circle(overlay, (xi, yi), r, rim_col, 1, cv2.LINE_AA)
+            # Reflection highlight (top-left)
+            hl_x, hl_y = xi - r // 3, yi - r // 3
+            hl_r = max(1, r // 5)
+            cv2.circle(overlay, (hl_x, hl_y), hl_r,
+                       (255, 255, 255), -1, cv2.LINE_AA)
+        # Blend overlay with transparency
+        alpha = 0.35
+        cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+        # Render pop particles (bright)
+        for p in self._pop_particles:
+            xi, yi = int(p['x']), int(p['y'])
+            if not (0 <= xi < w and 0 <= yi < h):
+                continue
+            life_p = p['age'] / p['life']
+            b = int(255 * (1 - life_p))
+            col = self._hsv_to_bgr(p['hue'], 0.8, 1.0)
+            col = tuple(int(c * (1 - life_p)) for c in col)
+            sz = int(p['size'] * (1 - life_p * 0.5))
+            if sz > 0:
+                cv2.circle(img, (xi, yi), sz, col, -1, cv2.LINE_AA)
+
+
+class AuroraAnimation(Animation):
+    def __init__(self, width: int, height: int):
+        super().__init__(duration=0, loop=True)
+        self._w, self._h = width, height
+        self._time = 0.0
+        self._bands = [
+            {'hue': 0.33, 'speed': 0.3, 'amp': 30, 'freq': 0.015, 'y_offset': 0.0},
+            {'hue': 0.45, 'speed': 0.45, 'amp': 45, 'freq': 0.022, 'y_offset': 25},
+            {'hue': 0.55, 'speed': 0.6, 'amp': 35, 'freq': 0.018, 'y_offset': 50},
+            {'hue': 0.65, 'speed': 0.35, 'amp': 25, 'freq': 0.025, 'y_offset': 70},
+            {'hue': 0.75, 'speed': 0.5, 'amp': 40, 'freq': 0.02, 'y_offset': 90},
+        ]
+        self._strip_height = height // 3
+        # Pre-compute positions for performance
+        self._x_coords = np.arange(0, width, 2)
+
+    def _aurora_bgr(self, hue: float, brightness: float):
+        h = hue * 180
+        hi = int(h / 30) % 6
+        f = h / 30 - hi
+        b = int(255 * brightness)
+        p = int(b * 0.4)
+        q = int(b * (1 - f * 0.6))
+        t = int(b * (1 - (1 - f) * 0.6))
+        if hi == 0:
+            return (b, t, p)
+        if hi == 1:
+            return (q, b, p)
+        if hi == 2:
+            return (p, b, t)
+        if hi == 3:
+            return (p, q, b)
+        if hi == 4:
+            return (t, p, b)
+        return (b, p, q)
+
+    def update(self, dt: float, progress: float):
+        self._time += dt
+
+    def render(self, img: np.ndarray, progress: float):
+        h, w = img.shape[:2]
+        overlay = np.zeros_like(img, dtype=np.float32)
+        base_y = h // 2 - self._strip_height // 2
+        for band in self._bands:
+            y_off = band['y_offset']
+            speed = band['speed']
+            amp = band['amp']
+            freq = band['freq']
+            for step, xi in enumerate(self._x_coords):
+                wave = math.sin(xi * freq + self._time * speed) * amp
+                wave += math.sin(xi * freq * 1.7 + self._time * speed * 0.6) * amp * 0.3
+                wy = base_y + y_off + wave
+                if wy < 0 or wy >= h:
+                    continue
+                vert_fade = 1.0
+                dist_from_center = abs(wy - (base_y + 45))
+                if dist_from_center > 40:
+                    vert_fade = max(0, 1 - (dist_from_center - 40) / 60)
+                if vert_fade < 0.02:
+                    continue
+                brightness = vert_fade * random.uniform(0.85, 1.0)
+                col = self._aurora_bgr(band['hue'], brightness)
+                # Draw as a vertical column with slight spread
+                for dy in range(-2, 3):
+                    py = int(wy) + dy
+                    if 0 <= py < h:
+                        fade_dy = 1 - abs(dy) * 0.3
+                        overlay[py, xi] += np.array(col, dtype=np.float32) * 0.6 * fade_dy
+        # Clip and blend
+        overlay = np.clip(overlay, 0, 255).astype(np.uint8)
+        mask = np.any(overlay > 5, axis=2)
+        blended = cv2.addWeighted(img, 0.55, overlay, 0.45, 0)
+        img[mask] = blended[mask]

@@ -175,6 +175,12 @@ _ZH_EN_MAP = {
     '闪烁': 'sparkle', '闪一下': 'sparkle', '闪闪': 'sparkle', '闪': 'sparkle',
     '魔法阵': 'magic circle', '魔法': 'magic circle', '画魔法阵': 'magic circle',
     '流星': 'starfall', '流星雨': 'starfall', '放流星': 'starfall',
+    '下雪': 'snow', '下雪了': 'snow', '雪': 'snow', '飘雪': 'snow',
+    '停雪': 'stop snow', '雪停': 'stop snow', '停止下雪': 'stop snow',
+    '泡泡': 'bubbles', '吹泡泡': 'bubbles', '放泡泡': 'bubbles',
+    '停泡泡': 'stop bubbles', '泡泡停': 'stop bubbles', '停止泡泡': 'stop bubbles',
+    '极光': 'aurora', '放极光': 'aurora', '画极光': 'aurora',
+    '停极光': 'stop aurora', '极光停': 'stop aurora', '停止极光': 'stop aurora',
     '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
 }
 
@@ -1885,6 +1891,12 @@ class CommandParser:
             (r"magic\s+circle", lambda m: MagicCircleCommand()),
             (r"starfall", lambda m: StartStarfallCommand()),
             (r"stop\s+starfall", lambda m: StopStarfallCommand()),
+            (r"snow", lambda m: StartSnowCommand()),
+            (r"stop\s+snow", lambda m: StopSnowCommand()),
+            (r"bubbles", lambda m: StartBubblesCommand()),
+            (r"stop\s+bubbles", lambda m: StopBubblesCommand()),
+            (r"aurora", lambda m: StartAuroraCommand()),
+            (r"stop\s+aurora", lambda m: StopAuroraCommand()),
         ]
 
     def _parse_single(self, text: str) -> Optional[Command]:
@@ -2536,3 +2548,69 @@ class StopStarfallCommand(Command):
         return f"☄ 流星停了 (removed {before - after})"
     def get_description(self) -> str:
         return "stop starfall effect"
+
+
+# ─── Phase 5: Premium Effects ────────────────────────────────────────────────
+
+class StartSnowCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import SnowAnimation
+        canvas.anim_mgr.add(SnowAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "❄ 下雪了"
+    def get_description(self) -> str:
+        return "start snow effect"
+
+class StopSnowCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import SnowAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, SnowAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"❄ 雪停了"
+    def get_description(self) -> str:
+        return "stop snow effect"
+
+class StartBubblesCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import BubblesAnimation
+        canvas.anim_mgr.add(BubblesAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "🫧 泡泡飘起来了"
+    def get_description(self) -> str:
+        return "start bubbles effect"
+
+class StopBubblesCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import BubblesAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, BubblesAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"🫧 泡泡没了"
+    def get_description(self) -> str:
+        return "stop bubbles effect"
+
+class StartAuroraCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import AuroraAnimation
+        canvas.anim_mgr.add(AuroraAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "🌌 极光出现了"
+    def get_description(self) -> str:
+        return "start aurora effect"
+
+class StopAuroraCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import AuroraAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, AuroraAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"🌌 极光消失了"
+    def get_description(self) -> str:
+        return "stop aurora effect"
