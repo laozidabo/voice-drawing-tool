@@ -3,8 +3,7 @@ from .commands import CommandParser, DrawCircleCommand, DrawLineCommand, \
     DrawStarCommand, DrawTextCommand, SetColorCommand, SetWidthCommand, \
     ClearCanvasCommand, UndoCommand, RedoCommand, SaveCommand, CompositeCommand, \
     StartRainCommand, StopRainCommand, GrowFlowerCommand, StartFirefliesCommand, \
-    FireworksCommand, SparkleCommand, MagicCircleCommand, StartStarfallCommand, \
-    VoiceBrushCommand, StopVoiceBrushCommand
+    FireworksCommand, SparkleCommand, MagicCircleCommand, StartStarfallCommand
 from .core import VoiceDrawingApp, DrawingCanvas, SpeechRecognizer
 from .animation import AnimationManager, RainAnimation, GrowFlowerAnimation, \
     FirefliesAnimation, ParticleSystem, FireworksAnimation, SparkleAnimation, \
