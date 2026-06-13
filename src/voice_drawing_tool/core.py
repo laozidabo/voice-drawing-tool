@@ -493,7 +493,8 @@ _DRAWING_PROMPT = (
     "在左上角 在正中间 在右下角 在上面 在下面 在左边 在右边 "
     "光标左移 光标右移 光标上移 光标下移 光标移到 撤销 重做 清空 保存 "
     "画房子 画树 画车 画太阳 画花 画笑脸 画流程图 "
-    "填充 空心 粗一点 细一点 红色 蓝色 绿色 黄色 紫色 黑色 白色"
+    "填充 空心 粗一点 细一点 红色 蓝色 绿色 黄色 紫色 黑色 白色 "
+    "下雨 开花 长成大树 萤火虫 停雨 停止动画 画一朵花 画一棵树 画一座山"
 )
 
 
@@ -670,12 +671,13 @@ class SpeechRecognizer:
                     tmp_path,
                     language="zh",
                     initial_prompt=_DRAWING_PROMPT,
-                    beam_size=5,           # 多 beam 提高精度
-                    best_of=3,             # 生成 3 个候选取最佳
+                    beam_size=10,          # 增大搜索宽度，提升准确率
+                    best_of=5,             # 生成 5 个候选取最佳
                     condition_on_previous_text=False,  # 防止幻觉级联
                     repetition_penalty=1.3,  # 抑制重复短语
                     no_repeat_ngram_size=3,  # 禁止 3-gram 重复
                     vad_filter=True,
+                    word_timestamps=True,
                     vad_parameters=dict(
                         min_silence_duration_ms=200,
                         speech_pad_ms=100,
@@ -695,10 +697,17 @@ class SpeechRecognizer:
                     # 后处理：去重重复短语（Whisper 幻觉修复）
                     text = self._dedup_whisper_text(text)
                     if text:
+                        # 字级置信度（word_timestamps=True 时可用）
+                        word_probs = [w.probability for w in (seg.words or [])]
+                        min_word_prob = min(word_probs) if word_probs else 0.0
+                        avg_word_prob = (sum(word_probs) / len(word_probs)
+                                         if word_probs else 0.0)
                         results.append({
                             "text": text,
                             "avg_logprob": seg.avg_logprob,
                             "no_speech_prob": seg.no_speech_prob,
+                            "min_word_prob": min_word_prob,
+                            "avg_word_prob": avg_word_prob,
                         })
 
             return results
@@ -787,16 +796,26 @@ class SpeechRecognizer:
                 audio.frame_data, audio.sample_rate
             )
             if whisper_results:
-                # 置信度过滤：avg_logprob 越接近 0 越好，< -1.0 通常不可靠
-                CONFIDENCE_THRESHOLD = -1.0
                 texts = []
                 for r in whisper_results:
                     logprob = r["avg_logprob"]
                     text = r["text"].strip()
-                    if logprob < CONFIDENCE_THRESHOLD:
+                    no_speech = r.get("no_speech_prob", 0)
+                    min_word = r.get("min_word_prob", 0)
+                    avg_word = r.get("avg_word_prob", 0)
+
+                    # 三级置信度过滤
+                    if logprob < -1.5:
                         if self.debug:
                             print(f"  [低置信度] \"{text}\" (logprob={logprob:.2f})")
                         continue
+
+                    # VAD 认为没有语音 + 置信度低 → 跳过
+                    if no_speech > 0.8 and logprob < -0.8:
+                        if self.debug:
+                            print(f"  [可能无语音] \"{text}\"")
+                        continue
+
                     texts.append(text)
 
                 if texts:
