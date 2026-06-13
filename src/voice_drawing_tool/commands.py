@@ -165,6 +165,13 @@ _ZH_EN_MAP = {
     '小山': 'small mountain', '高山': 'big mountain',
     '画笔': 'freehand', '自由画': 'freehand', '随便画': 'freehand', '手绘': 'freehand',
     '再来一个': 'repeat variation',
+    # Animation commands
+    '下雨': 'rain', '下点雨': 'rain', '开始下雨': 'rain',
+    '停雨': 'stop rain', '雨停': 'stop rain', '雨停了': 'stop rain',
+    '开花': 'grow flower', '开朵花': 'grow flower', '开花了': 'grow flower',
+    '长成大树': 'grow tree', '长树': 'grow tree', '长出一棵树': 'grow tree',
+    '萤火虫': 'fireflies', '放萤火虫': 'fireflies',
+    '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
 }
 
 _SPEECH_FIX_MAP = {
@@ -199,6 +206,8 @@ _SPEECH_FIX_MAP = {
     '鸿': '红', '宏': '红', '轰': '红', '洪': '红',
     '皇': '黄', '慌': '黄', '煌': '黄', '凰': '黄',
     '嘿': '黑', '赫': '黑', '核': '黑',
+    # Protect "长成" before individual "成" → "橙" mapping
+    '长成': '长成',
     '呈': '橙', '成': '橙', '城': '橙', '诚': '橙',
     '宗色': '棕色', '综色': '棕色', '总色': '棕色',
     '辉色': '灰色', '灰色': '灰色', '回色': '灰色', '会色': '灰色',
@@ -1861,6 +1870,12 @@ class CommandParser:
              lambda m: RepeatLastWithVariationCommand({'color': m.group('color')})),
             (r"repeat\s+variation",
              lambda m: RepeatLastWithVariationCommand()),
+            (r"rain", lambda m: StartRainCommand()),
+            (r"stop\s+rain", lambda m: StopRainCommand()),
+            (r"grow\s+flower", lambda m: GrowFlowerCommand()),
+            (r"grow\s+tree", lambda m: GrowTreeCommand()),
+            (r"firefl(?:y|ies)", lambda m: StartFirefliesCommand()),
+            (r"stop\s+animation", lambda m: StopAllAnimationsCommand()),
         ]
 
     def _parse_single(self, text: str) -> Optional[Command]:
@@ -2361,3 +2376,61 @@ class RepeatLastWithVariationCommand(Command):
         if self.color_override:
             return f"repeat last in {self.color_override}"
         return "repeat last at random position"
+
+
+# ─── Animation Commands ──────────────────────────────────────────────────────
+
+class StartRainCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import RainAnimation
+        canvas.anim_mgr.add(RainAnimation(canvas.WIDTH))
+        return "🌧 开始下雨"
+    def get_description(self) -> str:
+        return "start rain effect"
+
+class StopRainCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import RainAnimation
+        before = canvas.anim_mgr.active_count
+        canvas.anim_mgr._animations = [
+            a for a in canvas.anim_mgr._animations
+            if not isinstance(a, RainAnimation)
+        ]
+        after = canvas.anim_mgr.active_count
+        return f"☀ 雨停了 (removed {before - after} rain effects)"
+    def get_description(self) -> str:
+        return "stop rain effect"
+
+class GrowFlowerCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import GrowFlowerAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(GrowFlowerAnimation(cx, cy, canvas.pen_color))
+        return "🌷 开花啦"
+    def get_description(self) -> str:
+        return "grow a flower at cursor"
+
+class GrowTreeCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import GrowTreeAnimation
+        cx, cy = canvas.cursor_x, canvas.cursor_y
+        canvas.anim_mgr.add(GrowTreeAnimation(cx, cy))
+        return "🌳 大树长成"
+    def get_description(self) -> str:
+        return "grow a tree at cursor"
+
+class StartFirefliesCommand(Command):
+    def execute(self, canvas) -> str:
+        from .animation import FirefliesAnimation
+        canvas.anim_mgr.add(FirefliesAnimation(canvas.WIDTH, canvas.HEIGHT))
+        return "✨ 萤火虫飞来啦"
+    def get_description(self) -> str:
+        return "add fireflies effect"
+
+class StopAllAnimationsCommand(Command):
+    def execute(self, canvas) -> str:
+        count = canvas.anim_mgr.active_count
+        canvas.anim_mgr.clear()
+        return f"⏹ 停止了 {count} 个动画"
+    def get_description(self) -> str:
+        return "stop all animations"

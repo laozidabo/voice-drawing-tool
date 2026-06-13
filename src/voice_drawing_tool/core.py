@@ -57,6 +57,7 @@ _HAS_GUI = _gui_available()
 from .commands import (
     CommandParser, Command,
 )
+from .animation import AnimationManager, GrowFlowerAnimation, RainAnimation, GrowTreeAnimation, FirefliesAnimation
 
 _FONT_CACHE: dict = {}
 
@@ -126,6 +127,7 @@ class DrawingCanvas:
         self._cached_bottom_bar: Optional[np.ndarray] = None
         self._cached_grid: Optional[np.ndarray] = None
         self._cached_glow: Optional[np.ndarray] = None
+        self.anim_mgr = AnimationManager()
 
     def _cache_static_ui(self):
         if self._cached_top_bar is not None:
@@ -344,7 +346,8 @@ class DrawingCanvas:
         return None
 
     def get_preview(self, feedback_text: str = "", is_listening: bool = False,
-                    cmd_count: int = 0, session_duration: float = 0.0) -> np.ndarray:
+                    cmd_count: int = 0, session_duration: float = 0.0,
+                    dt: float = 0.0) -> np.ndarray:
         self._cache_static_ui()
         BAR_H = 28
         total_h = self.HEIGHT + BAR_H * 2
@@ -469,6 +472,9 @@ class DrawingCanvas:
         cv2.circle(v, (cx, canvas_cy), 2, self.pen_color, -1, cv2.LINE_AA)
         coord_txt = f"({cx},{cy_})"
         put_chinese_text(v, coord_txt, (cx + 12, canvas_cy + 16), 11, white)
+
+        canvas_roi = v[BAR_H:BAR_H + self.HEIGHT, :]
+        self.anim_mgr.update_and_render(dt, canvas_roi, self.image)
 
         return v
 
@@ -919,7 +925,12 @@ class VoiceDrawingApp:
             print("  示例: 画一个红圆 / 画房子 / 画一幅画：左边树右边山")
             print("="*60 + "\n")
 
+        prev_time = time.time()
         while self.running:
+            now = time.time()
+            dt = now - prev_time
+            prev_time = now
+
             # Reset pending confirmation on timeout
             if self._pending_confirm and time.time() - self._pending_confirm_time >= 5.0:
                 self._pending_confirm = None
@@ -931,6 +942,7 @@ class VoiceDrawingApp:
                     is_listening=self._is_listening,
                     cmd_count=self._cmd_count,
                     session_duration=time.time() - self._session_start,
+                    dt=dt,
                 )
                 
                 # Show welcome overlay for first 15 seconds
