@@ -128,6 +128,9 @@ class DrawingCanvas:
         self._cached_grid: Optional[np.ndarray] = None
         self._cached_glow: Optional[np.ndarray] = None
         self.anim_mgr = AnimationManager()
+        self.voice_brush_mode = False
+        self._last_audio_level = 0.0
+        self._smooth_width = 2.0
 
     def _cache_static_ui(self):
         if self._cached_top_bar is not None:
@@ -165,6 +168,14 @@ class DrawingCanvas:
         cv2.rectangle(grid, (0, 0), (total_w - 1, self.HEIGHT - 1), (185, 190, 195), 1)
         self._cached_grid = grid
 
+    def get_voice_width(self) -> float:
+        if not self.voice_brush_mode:
+            return self.pen_width
+        raw = max(0.05, min(1.0, self._last_audio_level))
+        target = 1.0 + raw * 24.0
+        self._smooth_width = self._smooth_width * 0.8 + target * 0.2
+        return max(1.0, min(20.0, self._smooth_width))
+
     def _save_state(self):
         self.history.append(self.image.copy())
         if len(self.history) > self.max_history:
@@ -172,11 +183,15 @@ class DrawingCanvas:
         self.redo_stack.clear()
 
     def draw_circle(self, x, y, radius, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         cv2.circle(self.image, (int(x), int(y)), int(radius),
                     color or self.pen_color, int(width), lineType=cv2.LINE_AA)
 
     def draw_ellipse(self, x, y, rx, ry, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         center = (int(x), int(y))
         axes = (int(rx), int(ry))
@@ -184,11 +199,15 @@ class DrawingCanvas:
                      color or self.pen_color, int(width), lineType=cv2.LINE_AA)
 
     def draw_line(self, x1, y1, x2, y2, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         cv2.line(self.image, (int(x1), int(y1)), (int(x2), int(y2)),
                   color or self.pen_color, int(width), lineType=cv2.LINE_AA)
 
     def draw_rectangle(self, x1, y1, x2, y2, color=None, width=2, filled=False):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         thickness = -1 if filled else int(width)
         color_val = color or self.pen_color
@@ -198,12 +217,16 @@ class DrawingCanvas:
                        color_val, thickness, lineType=cv2.LINE_AA)
 
     def draw_polygon(self, pts: List[int], color=None, width=2, filled=False):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         if len(pts) < 4 or len(pts) % 2 != 0:
             return
         self._save_state()
         self._draw_polygon_impl(pts, color=color, width=width, filled=filled)
 
     def draw_star(self, cx, cy, r, points=5, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         pts = []
         for i in range(points * 2):
@@ -214,6 +237,8 @@ class DrawingCanvas:
         self._draw_polygon_impl(pts, color=color, width=width)
 
     def _draw_polygon_impl(self, pts, color=None, width=2, filled=False):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         if len(pts) < 4 or len(pts) % 2 != 0:
             return
         points = np.array([[pts[i], pts[i + 1]] for i in range(0, len(pts), 2)], np.int32)
@@ -231,6 +256,8 @@ class DrawingCanvas:
         put_chinese_text(self.image, text, (int(x), int(y)), font_size, color_val)
 
     def draw_regular_polygon(self, cx, cy, r, sides, color=None, width=2, filled=False, rotation=0):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         pts = []
         for i in range(sides):
@@ -240,12 +267,16 @@ class DrawingCanvas:
         self._draw_polygon_impl(pts, color=color, width=width, filled=filled)
 
     def draw_ring(self, cx, cy, r_outer, r_inner, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         color_val = color or self.pen_color
         cv2.circle(self.image, (int(cx), int(cy)), int(r_outer), color_val, int(width), cv2.LINE_AA)
         cv2.circle(self.image, (int(cx), int(cy)), int(r_inner), color_val, int(width), cv2.LINE_AA)
 
     def draw_arc(self, cx, cy, r, start_angle, end_angle, color=None, width=2):
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         self._save_state()
         color_val = color or self.pen_color
         cv2.ellipse(self.image, (int(cx), int(cy)), (int(r), int(r)),
@@ -253,6 +284,8 @@ class DrawingCanvas:
 
     def draw_freehand(self, points, color=None, width=2):
         """Draw connected lines through a list of (x, y) points."""
+        if self.voice_brush_mode:
+            width = self.get_voice_width()
         if len(points) < 2:
             return
         self._save_state()
@@ -390,6 +423,20 @@ class DrawingCanvas:
                         (total_w - 330, ty), 12, BAR_TEXT_DIM)
         put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 260, ty), 12, BAR_TEXT_DIM)
 
+        # Voice-brush meter
+        vb_x = total_w - 190
+        if self.voice_brush_mode:
+            vw = self.get_voice_width()
+            cv2.rectangle(v, (vb_x, 6), (vb_x + 80, 22), (50, 45, 45), -1)
+            level_w = int(70 * min(1.0, self._last_audio_level))
+            if level_w > 0:
+                col = (30, 200 - int(150 * self._last_audio_level),
+                       100 + int(150 * self._last_audio_level))
+                cv2.rectangle(v, (vb_x + 5 + level_w, 8),
+                             (vb_x + 5, 20), col, -1)
+            put_chinese_text(v, f"声{vw:.0f}px", (vb_x + 84, ty), 11,
+                            (120, 220, 200))
+
 
 
         # --- Bottom bar (28px) ---
@@ -397,13 +444,21 @@ class DrawingCanvas:
         bty = by + 8  # text y in bottom bar
 
         # Status indicator: 3px left strip
-        cv2.rectangle(v, (0, by), (3, total_h), (50, 200, 80) if is_listening else BAR_TEXT_DIM, -1)
+        status_col = (50, 200, 80) if is_listening else BAR_TEXT_DIM
+        if self.voice_brush_mode:
+            status_col = (80, 180, 255)
+        cv2.rectangle(v, (0, by), (3, total_h), status_col, -1)
         # Status dot + text
         dot_x, dot_cy = 16, by + BAR_H // 2
         if is_listening:
             cv2.circle(v, (dot_x, dot_cy), 6, (40, 180, 80), -1, cv2.LINE_AA)
             cv2.circle(v, (dot_x, dot_cy), 6, (80, 220, 110), 2, cv2.LINE_AA)
-            put_chinese_text(v, "聆听中", (dot_x + 14, bty), 13, (100, 220, 130))
+            status_txt = "聆听中"
+            status_color = (100, 220, 130)
+            if self.voice_brush_mode:
+                status_txt = "声控"
+                status_color = (120, 200, 255)
+            put_chinese_text(v, status_txt, (dot_x + 14, bty), 13, status_color)
         else:
             cv2.circle(v, (dot_x, dot_cy), 4, BAR_TEXT_DIM, -1, cv2.LINE_AA)
             put_chinese_text(v, "待命", (dot_x + 12, bty), 13, BAR_TEXT_DIM)
@@ -494,7 +549,8 @@ _DRAWING_PROMPT = (
     "光标左移 光标右移 光标上移 光标下移 光标移到 撤销 重做 清空 保存 "
     "画房子 画树 画车 画太阳 画花 画笑脸 画流程图 "
     "填充 空心 粗一点 细一点 红色 蓝色 绿色 黄色 紫色 黑色 白色 "
-    "下雨 开花 长成大树 萤火虫 停雨 停止动画 画一朵花 画一棵树 画一座山"
+    "下雨 开花 长成大树 萤火虫 停雨 停止动画 画一朵花 画一棵树 画一座山 "
+    "声控画笔 取消声控 语音画笔"
 )
 
 
@@ -517,6 +573,8 @@ class SpeechRecognizer:
         self._listen_count = 0
         self._base_energy = 200
         self._cooldown_until = 0.0
+        self._last_rms = 0.0
+        self._smooth_rms = 0.0
         # init engines
         self._init_whisper()
         self._init_google()
@@ -790,6 +848,16 @@ class SpeechRecognizer:
 
         audio_len = len(audio.frame_data) / audio.sample_rate if hasattr(audio, 'frame_data') and hasattr(audio, 'sample_rate') else 0
 
+        # Compute RMS audio level from raw PCM data
+        try:
+            raw = np.frombuffer(audio.frame_data, dtype=np.int16).astype(np.float32)
+            if len(raw) > 0:
+                rms = float(np.sqrt(np.mean(raw ** 2)))
+                self._last_rms = min(1.0, rms / 8000.0)
+                self._smooth_rms = self._smooth_rms * 0.7 + self._last_rms * 0.3
+        except Exception:
+            self._last_rms = 0.0
+
         # 优先使用 Whisper
         if self._whisper_available:
             whisper_results = self._transcribe_whisper(
@@ -846,6 +914,10 @@ class SpeechRecognizer:
             return clean
         return None
 
+    def get_audio_level(self) -> float:
+        """Return smoothed audio level in [0, 1]."""
+        return self._smooth_rms
+
     def listen(self) -> Optional[str]:
         texts = self.listen_with_alternatives()
         if not texts:
@@ -888,7 +960,11 @@ HELP_TEXT = """🎤 语音绘图快速指南
   填充 / 空心 / 粗一点 / 细一点
 
 【操作】
-  撤销 / 重做 / 清空 / 保存 / 退出
+   撤销 / 重做 / 清空 / 保存 / 退出
+
+【🎤 声控画笔】
+   说"声控画笔"开启：声大则粗，声小则细
+   说"取消声控"关闭
 
 💡 提示: 直接说 "帮助" 随时查看此指南"""
 
@@ -956,6 +1032,9 @@ class VoiceDrawingApp:
                 self._pending_confirm_time = 0.0
             self._process_queue()
             if self.gui:
+                # Update voice brush audio level from recognizer
+                if self.recognizer:
+                    self.canvas._last_audio_level = self.recognizer.get_audio_level()
                 img = self.canvas.get_preview(
                     self._get_feedback(),
                     is_listening=self._is_listening,

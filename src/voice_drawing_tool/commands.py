@@ -176,6 +176,10 @@ _ZH_EN_MAP = {
     '魔法阵': 'magic circle', '魔法': 'magic circle', '画魔法阵': 'magic circle',
     '流星': 'starfall', '流星雨': 'starfall', '放流星': 'starfall',
     '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
+    '声控画笔': 'voice brush', '语音画笔': 'voice brush', '声音画笔': 'voice brush',
+    '声控': 'voice brush', '语音笔刷': 'voice brush',
+    '取消声控': 'stop voice brush', '关闭声控': 'stop voice brush',
+    '无声控': 'stop voice brush', '停止声控': 'stop voice brush',
 }
 
 _SPEECH_FIX_MAP = {
@@ -1885,6 +1889,8 @@ class CommandParser:
             (r"magic\s+circle", lambda m: MagicCircleCommand()),
             (r"starfall", lambda m: StartStarfallCommand()),
             (r"stop\s+starfall", lambda m: StopStarfallCommand()),
+            (r"voice\s?brush", lambda m: VoiceBrushCommand()),
+            (r"stop\s+voice\s?brush", lambda m: StopVoiceBrushCommand()),
         ]
 
     def _parse_single(self, text: str) -> Optional[Command]:
@@ -2536,3 +2542,18 @@ class StopStarfallCommand(Command):
         return f"☄ 流星停了 (removed {before - after})"
     def get_description(self) -> str:
         return "stop starfall effect"
+
+
+class VoiceBrushCommand(Command):
+    def execute(self, canvas) -> str:
+        canvas.voice_brush_mode = True
+        return "🎤 声控画笔已开启 — 大声画粗，小声画细"
+    def get_description(self) -> str:
+        return "enable voice-controlled brush width"
+
+class StopVoiceBrushCommand(Command):
+    def execute(self, canvas) -> str:
+        canvas.voice_brush_mode = False
+        return "🎤 声控画笔已关闭"
+    def get_description(self) -> str:
+        return "disable voice-controlled brush width"
