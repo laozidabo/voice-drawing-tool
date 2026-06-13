@@ -190,6 +190,10 @@ class DrawingCanvas:
         for (gcol, grow), label in zone_labels.items():
             cx = gcol * zone_w + zone_w // 2
             cy = grow * zone_h + zone_h // 2
+            if label == "正中":
+                # Offset away from the default cursor position (canvas center)
+                # so it doesn't permanently collide with the crosshair.
+                cy -= 70
             _label_bg(grid, cx - 22, cy - 10, 44, 20)
             put_chinese_text(grid, label, (cx - 16, cy - 7), 13, zone_col)
         cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (195, 200, 205), 1)
@@ -376,9 +380,9 @@ class DrawingCanvas:
     def _get_cursor_glow(self):
         if self._cached_glow is not None:
             return self._cached_glow
-        w, h = 49, 49
+        w, h = 33, 33
         glow = np.zeros((h, w, 3), dtype=np.uint8)
-        cv2.circle(glow, (24, 24), 24, (255, 190, 130), -1, cv2.LINE_AA)
+        cv2.circle(glow, (16, 16), 16, (255, 190, 130), -1, cv2.LINE_AA)
         self._cached_glow = glow
         return glow
 
@@ -489,7 +493,7 @@ class DrawingCanvas:
         cx, cy_ = int(self.cursor_x), int(self.cursor_y)
         canvas_cy = cy_ + BAR_H
         cur_col = (50, 45, 45)
-        glow_r = 24
+        glow_r = 16
         glow = self._get_cursor_glow()
         x1g = max(0, cx - glow_r)
         y1g = max(0, canvas_cy - glow_r)
@@ -509,22 +513,23 @@ class DrawingCanvas:
                 np.copyto(roi, blended, where=mask_g[..., None])
             v[y1g:y2g, x1g:x2g] = roi
 
-        cur_len, gap = 25, 7
+        cur_len, gap = 16, 5
         white = (255, 255, 255)
         def _cross(ox, oy, thick, col):
             cv2.line(v, (cx - cur_len + ox, canvas_cy + oy), (cx - gap + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
             cv2.line(v, (cx + gap + ox, canvas_cy + oy), (cx + cur_len + ox, canvas_cy + oy), col, thick, cv2.LINE_AA)
             cv2.line(v, (cx + ox, canvas_cy - cur_len + oy), (cx + ox, canvas_cy - gap + oy), col, thick, cv2.LINE_AA)
             cv2.line(v, (cx + ox, canvas_cy + gap + oy), (cx + ox, canvas_cy + cur_len + oy), col, thick, cv2.LINE_AA)
-        _cross(0, 0, 3, white)
+        _cross(0, 0, 2, white)
         _cross(0, 0, 1, cur_col)
-        cv2.circle(v, (cx, canvas_cy), 4, white, -1, cv2.LINE_AA)
+        cv2.circle(v, (cx, canvas_cy), 3, white, -1, cv2.LINE_AA)
         cv2.circle(v, (cx, canvas_cy), 2, cur_col, -1, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 11, white, 3, cv2.LINE_AA)
-        cv2.circle(v, (cx, canvas_cy), 10, self.pen_color, 1, cv2.LINE_AA)
-        put_chinese_text(v, f"({cx},{cy_})", (cx + 16, canvas_cy - 10), 10, cur_col)
-        # white bg behind coord text for readability
-        put_chinese_text(v, f"({cx},{cy_})", (cx + 15, canvas_cy - 9), 10, white)
+        cv2.circle(v, (cx, canvas_cy), 7, white, 2, cv2.LINE_AA)
+        cv2.circle(v, (cx, canvas_cy), 6, self.pen_color, 1, cv2.LINE_AA)
+        # coordinate readout: white outline text for legibility on any background
+        coord_txt = f"({cx},{cy_})"
+        put_chinese_text(v, coord_txt, (cx + 11, canvas_cy + 14), 10, white)
+        put_chinese_text(v, coord_txt, (cx + 12, canvas_cy + 15), 10, cur_col)
 
         return v
 
