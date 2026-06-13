@@ -2225,13 +2225,8 @@ class CommandParser:
                 if any(kw in description for kw in shape_keywords):
                     return SceneDescriptionCommand(description)
 
-        # 拼音模糊匹配：暂时禁用（太激进，破坏复合词如"椭圆"→"朵圆"）
-        # TODO: 修复拼音匹配器，只匹配单字同音错误，不拆分复合词
-        # try:
-        #     from .pinyin_matcher import pinyin_replace_unknown
-        #     text = pinyin_replace_unknown(text, list(_ZH_EN_ALL.keys()))
-        # except Exception:
-        #     pass
+        # 拼音模糊匹配：在直接匹配失败后，用拼音近似度匹配
+        # 注意：不在翻译前替换文本，避免破坏已知复合词
         text_en = zh_to_en(text)
         multi = self._parse_multi(text_en)
         if multi:
@@ -2242,12 +2237,59 @@ class CommandParser:
         cmd = self._parse_single(text_en)
         if cmd:
             return cmd
+        # 拼音模糊匹配：用原始中文文本做拼音近似匹配
+        cmd = self._pinyin_fallback(text)
+        if cmd:
+            return cmd
         cmd = self._fuzzy_fallback(text_en)
         if cmd:
             return cmd
 
         # --- Did-you-mean suggestions ---
         return self._suggest(text_en)
+
+    def _pinyin_fallback(self, text: str) -> Optional[Command]:
+        """拼音模糊匹配：当直接解析失败时，用拼音编辑距离匹配已知中文命令。"""
+        if not text or not any('\u4e00' <= ch <= '\u9fff' for ch in text):
+            return None
+        try:
+            from .pinyin_matcher import _to_pinyin, _edit_distance
+        except Exception:
+            return None
+        # 构建拼音索引（首次调用时缓存）
+        if not hasattr(self, '_pinyin_index'):
+            self._pinyin_index = {}
+            for zh in _ZH_EN_ALL:
+                try:
+                    py = _to_pinyin(zh)
+                    if py:
+                        self._pinyin_index[zh] = py
+                except Exception:
+                    continue
+        text_py = _to_pinyin(text)
+        if not text_py:
+            return None
+        best_zh = None
+        best_dist = 3  # 最多允许 2 处拼音差异
+        for zh_cmd, cmd_py in self._pinyin_index.items():
+            if text_py == cmd_py:
+                best_zh = zh_cmd
+                best_dist = 0
+                break
+            dist = _edit_distance(text_py, cmd_py)
+            if dist < best_dist:
+                best_dist = dist
+                best_zh = zh_cmd
+        if best_zh and best_dist <= 2:
+            en = zh_to_en(best_zh) if best_zh in _ZH_EN_ALL else best_zh
+            cmd = self._parse_single(en)
+            if cmd:
+                return cmd
+            # 也尝试在模糊匹配上下文中使用
+            cmd = self._fuzzy_fallback(en)
+            if cmd:
+                return cmd
+        return None
 
     def _suggest(self, text_en: str) -> Optional[Command]:
         """Return a SuggestionCommand if close keyword matches are found."""
