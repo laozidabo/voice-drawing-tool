@@ -57,7 +57,7 @@ _HAS_GUI = _gui_available()
 from .commands import (
     CommandParser, Command,
 )
-from .animation import AnimationManager, GrowFlowerAnimation, RainAnimation, GrowTreeAnimation, FirefliesAnimation
+from .animation import AnimationManager, GrowFlowerAnimation, RainAnimation, GrowTreeAnimation, FirefliesAnimation, FireworksAnimation, SparkleAnimation, MagicCircleAnimation, StarfallAnimation
 
 _FONT_CACHE: dict = {}
 

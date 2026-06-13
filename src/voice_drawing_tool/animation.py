@@ -1,5 +1,6 @@
 import time
 import math
+import random
 import numpy as np
 import cv2
 from typing import List, Optional, Tuple
@@ -298,3 +299,212 @@ class GrowTreeAnimation(Animation):
 
     def finish(self, canvas_img: np.ndarray):
         self.render(canvas_img, 1.0)
+
+
+# ─── Phase 3: Particle Magic ─────────────────────────────────────────────────
+
+class FireworksAnimation(Animation):
+    def __init__(self, cx: int, cy: int, color: Optional[Tuple[int, int, int]] = None):
+        super().__init__(duration=2.5)
+        self.cx = cx
+        self.cy = cy
+        self.burst_color = color or (random.randint(100, 255),
+                                     random.randint(50, 200),
+                                     random.randint(50, 200))
+        self._ps = ParticleSystem()
+        self._has_burst = False
+        self._start_y = cy + 60
+
+    def update(self, dt: float, progress: float):
+        if progress < 0.25:
+            pass
+        elif not self._has_burst:
+            self._has_burst = True
+            colors = [
+                self.burst_color,
+                (min(255, self.burst_color[0] + 60),
+                 min(255, self.burst_color[1] + 60),
+                 min(255, self.burst_color[2] + 60)),
+                (255, 255, 255),
+                (min(255, self.burst_color[0] + 30),
+                 max(0, self.burst_color[1] - 30),
+                 max(0, self.burst_color[2] - 30)),
+            ]
+            for _ in range(100):
+                angle = random.uniform(0, 2 * math.pi)
+                speed = random.uniform(100, 280)
+                vx = speed * math.cos(angle)
+                vy = speed * math.sin(angle) - 40
+                life = random.uniform(0.5, 1.8)
+                color = colors[random.randint(0, len(colors) - 1)]
+                sz = random.uniform(1.5, 3.5)
+                self._ps.particles.append(Particle(self.cx, self.cy, vx, vy, life, color, sz))
+            # Sparkle tail particles
+            for _ in range(30):
+                angle = random.uniform(0, 2 * math.pi)
+                speed = random.uniform(50, 120)
+                vx = speed * math.cos(angle)
+                vy = speed * math.sin(angle)
+                life = random.uniform(0.3, 0.8)
+                self._ps.particles.append(Particle(self.cx, self.cy, vx, vy, life,
+                                                  (255, 255, 230), random.uniform(1, 2)))
+        self._ps.update(dt)
+
+    def render(self, img: np.ndarray, progress: float):
+        if progress < 0.25:
+            rpy = int(self._start_y - (self._start_y - self.cy) * (progress / 0.25))
+            cv2.line(img, (self.cx, rpy + 20), (self.cx, rpy - 2),
+                     (200, 180, 100), 2, cv2.LINE_AA)
+            cv2.circle(img, (self.cx, rpy - 2), 3, (255, 220, 150), -1, cv2.LINE_AA)
+        self._ps.render(img)
+
+
+class SparkleAnimation(Animation):
+    def __init__(self, cx: int, cy: int, radius: int = 120, count: int = 25):
+        super().__init__(duration=1.8)
+        self.cx = cx
+        self.cy = cy
+        self._sparkles = []
+        for _ in range(count):
+            angle = random.uniform(0, 2 * math.pi)
+            dist = random.uniform(5, radius)
+            self._sparkles.append({
+                'x': cx + dist * math.cos(angle),
+                'y': cy + dist * math.sin(angle),
+                'phase': random.uniform(0, math.pi * 2),
+                'speed': random.uniform(3, 7),
+                'size': random.uniform(1.5, 4),
+                'color': (random.randint(200, 255), random.randint(200, 255),
+                          random.randint(150, 255)),
+            })
+
+    def render(self, img: np.ndarray, progress: float):
+        h, w = img.shape[:2]
+        fade = 1.0 - progress * 0.6
+        for s in self._sparkles:
+            brightness = math.sin(progress * s['speed'] * math.pi + s['phase'])
+            brightness = max(0, brightness) * fade
+            if brightness < 0.05:
+                continue
+            xi, yi = int(s['x']), int(s['y'])
+            if not (0 <= xi < w and 0 <= yi < h):
+                continue
+            col = tuple(min(255, int(c * brightness)) for c in s['color'])
+            sz = int(s['size'])
+            cv2.line(img, (xi - sz * 2, yi), (xi + sz * 2, yi), col, 1, cv2.LINE_AA)
+            cv2.line(img, (xi, yi - sz * 2), (xi, yi + sz * 2), col, 1, cv2.LINE_AA)
+            cv2.line(img, (xi - sz, yi - sz), (xi + sz, yi + sz), col, 1, cv2.LINE_AA)
+            cv2.line(img, (xi + sz, yi - sz), (xi - sz, yi + sz), col, 1, cv2.LINE_AA)
+
+
+class MagicCircleAnimation(Animation):
+    def __init__(self, cx: int, cy: int, color: Optional[Tuple[int, int, int]] = None):
+        super().__init__(duration=2.5)
+        self.cx = cx
+        self.cy = cy
+        self.color = color or (220, 130, 60)
+
+    def render(self, img: np.ndarray, progress: float):
+        cx, cy = self.cx, self.cy
+        if progress < 0.2:
+            r = int(10 + progress / 0.2 * 80)
+            cv2.circle(img, (cx, cy), r, self.color, 2, cv2.LINE_AA)
+            cv2.circle(img, (cx, cy), r + 5, (min(255, self.color[0] + 30),
+                                              min(255, self.color[1] + 30),
+                                              min(255, self.color[2] + 30)), 1, cv2.LINE_AA)
+        elif progress < 0.5:
+            r = 90
+            alpha = (progress - 0.2) / 0.3
+            cv2.circle(img, (cx, cy), r, self.color, 2, cv2.LINE_AA)
+            # Inner rotating ring
+            inner_r = int(40 + alpha * 30)
+            cv2.circle(img, (cx, cy), inner_r,
+                       (min(255, self.color[0] + 50), min(255, self.color[1] + 50),
+                        min(255, self.color[2] + 50)), 1, cv2.LINE_AA)
+            # Radial lines
+            for i in range(8):
+                angle = math.radians(i * 45 + alpha * 45)
+                x1 = cx + int(inner_r * math.cos(angle))
+                y1 = cy + int(inner_r * math.sin(angle))
+                x2 = cx + int(r * math.cos(angle))
+                y2 = cy + int(r * math.sin(angle))
+                cv2.line(img, (x1, y1), (x2, y2), self.color, 1, cv2.LINE_AA)
+            # Center
+            cv2.circle(img, (cx, cy), 3,
+                       (min(255, self.color[0] + 80), min(255, self.color[1] + 80),
+                        min(255, self.color[2] + 80)), -1, cv2.LINE_AA)
+        else:
+            alpha = (progress - 0.5) / 0.5
+            r = 90
+            glow = int(max(0, 255 * (1 - alpha)))
+            col = (min(255, self.color[0] + int(50 * alpha)),
+                   min(255, self.color[1] + int(50 * alpha)),
+                   min(255, self.color[2] + int(50 * alpha)))
+            cv2.circle(img, (cx, cy), r, col, 2, cv2.LINE_AA)
+            inner_r = 70
+            for i in range(12):
+                angle = math.radians(i * 30 + alpha * 90)
+                x2 = cx + int(r * math.cos(angle))
+                y2 = cy + int(r * math.sin(angle))
+                cv2.line(img, (cx, cy), (x2, y2), col, 1, cv2.LINE_AA)
+            cv2.circle(img, (cx, cy), inner_r, (glow, glow, glow), 1, cv2.LINE_AA)
+            cv2.circle(img, (cx, cy), 4, (255, 255, 255), -1, cv2.LINE_AA)
+
+    def finish(self, canvas_img: np.ndarray):
+        cx, cy = self.cx, self.cy
+        cv2.circle(canvas_img, (cx, cy), 90, self.color, 2, cv2.LINE_AA)
+        cv2.circle(canvas_img, (cx, cy), 3,
+                   (min(255, self.color[0] + 80), min(255, self.color[1] + 80),
+                    min(255, self.color[2] + 80)), -1, cv2.LINE_AA)
+
+
+class StarfallAnimation(Animation):
+    def __init__(self, width: int, height: int):
+        super().__init__(duration=0, loop=True)
+        self._w, self._h = width, height
+        self._stars: List[dict] = []
+        self._accum = 0.0
+
+    def update(self, dt: float, progress: float):
+        self._accum += dt
+        if self._accum > random.uniform(0.8, 2.5):
+            self._accum = 0
+            x = random.uniform(50, self._w - 50)
+            self._stars.append({
+                'x': x,
+                'y': -10,
+                'vx': random.uniform(60, 150),
+                'vy': random.uniform(180, 350),
+                'life': random.uniform(0.8, 1.8),
+                'age': 0.0,
+                'size': random.uniform(1.5, 3),
+                'brightness': random.uniform(0.6, 1.0),
+            })
+        alive = []
+        for s in self._stars:
+            s['x'] += s['vx'] * dt
+            s['y'] += s['vy'] * dt
+            s['age'] += dt
+            if s['age'] < s['life'] and 0 <= s['x'] <= self._w and s['y'] < self._h + 20:
+                alive.append(s)
+        self._stars = alive
+
+    def render(self, img: np.ndarray, progress: float):
+        h, w = img.shape[:2]
+        for s in self._stars:
+            xi, yi = int(s['x']), int(s['y'])
+            if not (0 <= xi < w and 0 <= yi < h):
+                continue
+            life_p = s['age'] / s['life']
+            b = s['brightness'] * (1 - life_p * 0.7)
+            col = tuple(int(200 * b) for _ in range(3))
+            sz = int(s['size'])
+            # Trail
+            trail_len = int(12 * (1 - life_p))
+            if trail_len > 2:
+                cv2.line(img, (xi, yi), (xi - int(s['vx'] * 0.01 * trail_len),
+                                         yi - int(s['vy'] * 0.01 * trail_len)),
+                         tuple(c // 2 for c in col), 1, cv2.LINE_AA)
+            # Star head
+            cv2.line(img, (xi - sz, yi), (xi + sz, yi), col, 1, cv2.LINE_AA)
+            cv2.line(img, (xi, yi - sz), (xi, yi + sz), col, 1, cv2.LINE_AA)
