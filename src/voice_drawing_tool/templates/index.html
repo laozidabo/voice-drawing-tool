@@ -9,180 +9,44 @@
 </head>
 <body>
 
+<!-- 顶部状态栏 -->
 <header class="top-bar">
   <div class="top-left">
     <span class="logo">🎤</span>
     <h1>语音绘图</h1>
-    <span class="badge" id="status-badge">● 已连接</span>
+    <span class="badge" id="status-badge">● 连接中…</span>
   </div>
   <div class="top-right">
-    <span class="stat"><span class="label">光标</span><span id="cursor-pos">(400,300)</span></span>
-    <span class="stat"><span class="label">形状</span><span id="shape-count">0</span></span>
     <span class="stat"><span class="label">指令</span><span id="cmd-count">0</span></span>
     <span class="stat"><span class="label">时长</span><span id="duration">00:00</span></span>
   </div>
 </header>
 
-<main class="layout">
-  <!-- 左侧面板 -->
-  <aside class="panel left-panel">
-    <section class="card">
-      <h3>图形</h3>
-      <div class="shape-grid">
-        <button class="shape-btn" data-cmd="画圆" title="画圆">⬤</button>
-        <button class="shape-btn" data-cmd="画正方形" title="正方形">◼</button>
-        <button class="shape-btn" data-cmd="画长方形" title="长方形">▬</button>
-        <button class="shape-btn" data-cmd="画三角形" title="三角形">▲</button>
-        <button class="shape-btn" data-cmd="画五角星" title="五角星">★</button>
-        <button class="shape-btn" data-cmd="画椭圆" title="椭圆">⬮</button>
-        <button class="shape-btn" data-cmd="画线" title="直线">╱</button>
-        <button class="shape-btn" data-cmd="画圆环" title="圆环">◎</button>
-        <button class="shape-btn" data-cmd="画六边形" title="六边形">⬡</button>
-        <button class="shape-btn" data-cmd="画菱形" title="菱形">◆</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>颜色</h3>
-      <div class="color-grid" id="color-grid">
-        <button class="color-btn active" data-color="red" style="--c:#ff0000" title="红"></button>
-        <button class="color-btn" data-color="blue" style="--c:#0000ff" title="蓝"></button>
-        <button class="color-btn" data-color="green" style="--c:#00ff00" title="绿"></button>
-        <button class="color-btn" data-color="yellow" style="--c:#ffff00" title="黄"></button>
-        <button class="color-btn" data-color="black" style="--c:#000000" title="黑"></button>
-        <button class="color-btn" data-color="white" style="--c:#ffffff" title="白"></button>
-        <button class="color-btn" data-color="orange" style="--c:#ffa500" title="橙"></button>
-        <button class="color-btn" data-color="purple" style="--c:#800080" title="紫"></button>
-        <button class="color-btn" data-color="pink" style="--c:#ff69b4" title="粉"></button>
-        <button class="color-btn" data-color="brown" style="--c:#a52a2a" title="棕"></button>
-        <button class="color-btn" data-color="gray" style="--c:#808080" title="灰"></button>
-        <button class="color-btn" data-color="cyan" style="--c:#00ffff" title="青"></button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>线宽 <span id="width-display">2</span></h3>
-      <input type="range" id="width-slider" min="1" max="12" value="2" class="slider">
-    </section>
-
-    <section class="card">
-      <h3>样式</h3>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="填充">填充</button>
-        <button class="action-btn" data-cmd="空心">空心</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="粗一点">粗+</button>
-        <button class="action-btn" data-cmd="细一点">细-</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>场景</h3>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="画房子">🏠 房子</button>
-        <button class="action-btn" data-cmd="画树">🌳 树</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="画车">🚗 车</button>
-        <button class="action-btn" data-cmd="画太阳">☀ 太阳</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="画小花">🌸 花</button>
-        <button class="action-btn" data-cmd="画山">⛰ 山</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="画笑脸">😊 笑脸</button>
-        <button class="action-btn" data-cmd="画流程图">📊 流程图</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>动画</h3>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="下雨">🌧 雨</button>
-        <button class="action-btn" data-cmd="下雪">❄ 雪</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="烟花">🎆 烟花</button>
-        <button class="action-btn" data-cmd="萤火虫">✨ 萤火虫</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" data-cmd="极光">🌌 极光</button>
-        <button class="action-btn" data-cmd="开花">🌷 开花</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn stop-btn" data-cmd="停止动画">⏹ 停止</button>
-      </div>
-    </section>
-  </aside>
-
-  <!-- 中央画布 -->
-  <div class="canvas-area">
-    <div class="canvas-wrapper">
-      <img id="canvas-img" src="/api/preview" alt="画布">
-      <div id="feedback-toast" class="toast hidden"></div>
-      <!-- 语音状态指示 -->
-      <div id="voice-indicator" class="voice-indicator hidden">
-        <div class="voice-wave"><span></span><span></span><span></span><span></span><span></span></div>
-        <span class="voice-label">正在聆听…</span>
-      </div>
+<!-- 画布区域 -->
+<div class="canvas-full">
+  <div class="canvas-wrapper">
+    <img id="canvas-img" src="/api/preview" alt="画布">
+    <!-- 语音状态指示 -->
+    <div id="voice-indicator" class="voice-indicator">
+      <div class="voice-wave"><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="voice-label" id="voice-label">正在聆听…</span>
     </div>
-    <!-- 语音控制栏 -->
-    <div class="cmd-bar">
-      <button id="mic-btn" class="mic-btn" title="点击开始语音识别">🎤</button>
-      <input type="text" id="cmd-input" placeholder="点击麦克风说话，或手动输入指令…" autocomplete="off">
-      <button id="cmd-send" class="send-btn">执行</button>
+    <!-- 反馈提示 -->
+    <div id="feedback-toast" class="toast hidden"></div>
+    <!-- 欢迎提示（首次打开） -->
+    <div id="welcome-overlay" class="welcome-overlay">
+      <div class="welcome-content">
+        <h2>🎤 语音绘图工具</h2>
+        <p>纯语音交互，说出指令即可绘图</p>
+        <button id="start-mic" class="start-mic-btn">🎤 点击启动语音识别</button>
+        <div class="welcome-examples">
+          <span>画红圆</span><span>画房子</span><span>画太阳在上面</span>
+          <span>撤销</span><span>清空</span><span>保存</span>
+        </div>
+      </div>
     </div>
   </div>
-
-  <!-- 右侧面板 -->
-  <aside class="panel right-panel">
-    <section class="card">
-      <h3>操作</h3>
-      <div class="btn-row">
-        <button class="action-btn" id="btn-undo">↩ 撤销</button>
-        <button class="action-btn" id="btn-redo">↪ 重做</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" id="btn-clear">🗑 清空</button>
-        <button class="action-btn" id="btn-save">💾 保存</button>
-      </div>
-      <div class="btn-row">
-        <button class="action-btn" id="btn-download">⬇ 下载PNG</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>位置</h3>
-      <div class="pos-grid">
-        <button class="pos-btn" data-cmd="在左上角">↖</button>
-        <button class="pos-btn" data-cmd="在上中">↑</button>
-        <button class="pos-btn" data-cmd="在右上角">↗</button>
-        <button class="pos-btn" data-cmd="在左中">←</button>
-        <button class="pos-btn" data-cmd="在正中间">●</button>
-        <button class="pos-btn" data-cmd="在右中">→</button>
-        <button class="pos-btn" data-cmd="在左下角">↙</button>
-        <button class="pos-btn" data-cmd="在下中">↓</button>
-        <button class="pos-btn" data-cmd="在右下角">↘</button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>指令历史</h3>
-      <div id="cmd-history" class="cmd-history"></div>
-    </section>
-
-    <section class="card help-card">
-      <h3>帮助</h3>
-      <div class="help-hint">
-        <p>🎤 点击麦克风按钮开始语音控制</p>
-        <p>直接说出指令即可绘图</p>
-        <p class="dim">示例：红圆、画房子、撤销、清空</p>
-      </div>
-    </section>
-  </aside>
-</main>
+</div>
 
 <script src="/static/app.js"></script>
 </body>
