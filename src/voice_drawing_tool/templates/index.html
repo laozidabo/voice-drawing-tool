@@ -122,10 +122,16 @@
     <div class="canvas-wrapper">
       <img id="canvas-img" src="/api/preview" alt="画布">
       <div id="feedback-toast" class="toast hidden"></div>
+      <!-- 语音状态指示 -->
+      <div id="voice-indicator" class="voice-indicator hidden">
+        <div class="voice-wave"><span></span><span></span><span></span><span></span><span></span></div>
+        <span class="voice-label">正在聆听…</span>
+      </div>
     </div>
-    <!-- 命令输入栏 -->
+    <!-- 语音控制栏 -->
     <div class="cmd-bar">
-      <input type="text" id="cmd-input" placeholder="输入指令，如：画红圆在正中间、画房子、撤销…" autocomplete="off">
+      <button id="mic-btn" class="mic-btn" title="点击开始语音识别">🎤</button>
+      <input type="text" id="cmd-input" placeholder="点击麦克风说话，或手动输入指令…" autocomplete="off">
       <button id="cmd-send" class="send-btn">执行</button>
     </div>
   </div>
@@ -170,9 +176,9 @@
     <section class="card help-card">
       <h3>帮助</h3>
       <div class="help-hint">
-        <p>直接在命令框输入中文指令</p>
-        <p>或点击左侧按钮组合使用</p>
-        <p class="dim">示例：红圆、画房子、撤销</p>
+        <p>🎤 点击麦克风按钮开始语音控制</p>
+        <p>直接说出指令即可绘图</p>
+        <p class="dim">示例：红圆、画房子、撤销、清空</p>
       </div>
     </section>
   </aside>

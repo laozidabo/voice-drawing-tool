@@ -249,6 +249,78 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 10px;
+  align-items: center;
+}
+
+/* ── Microphone Button ───────────────────────────────────────── */
+.mic-btn {
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  cursor: pointer;
+  transition: all .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.mic-btn:hover { border-color: var(--accent); background: rgba(79,110,247,.15); }
+.mic-btn.listening {
+  border-color: var(--green);
+  background: rgba(52,211,153,.2);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+.mic-btn.listening::after { content: ''; }
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52,211,153,.4); }
+  50% { box-shadow: 0 0 0 12px rgba(52,211,153,0); }
+}
+.mic-btn.unsupported { opacity: .4; cursor: not-allowed; }
+
+/* ── Voice Indicator Overlay ─────────────────────────────────── */
+.voice-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: rgba(52,211,153,.15);
+  border: 1px solid rgba(52,211,153,.3);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+  transition: opacity .3s;
+}
+.voice-indicator.hidden { opacity: 0; pointer-events: none; }
+.voice-label { font-size: 12px; color: var(--green); }
+.voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+}
+.voice-wave span {
+  display: block;
+  width: 3px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 2px;
+  animation: wave-bar 0.8s ease-in-out infinite;
+}
+.voice-wave span:nth-child(1) { animation-delay: 0s; }
+.voice-wave span:nth-child(2) { animation-delay: 0.1s; }
+.voice-wave span:nth-child(3) { animation-delay: 0.2s; }
+.voice-wave span:nth-child(4) { animation-delay: 0.3s; }
+.voice-wave span:nth-child(5) { animation-delay: 0.4s; }
+@keyframes wave-bar {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
 }
 #cmd-input {
   flex: 1;

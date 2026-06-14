@@ -216,6 +216,95 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ── Web Speech API (浏览器端语音识别) ────────────────────────
+  const micBtn = $("#mic-btn");
+  const voiceIndicator = $("#voice-indicator");
+  let recognition = null;
+  let isListening = false;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = "zh-CN";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 3;
+
+    recognition.onstart = () => {
+      isListening = true;
+      micBtn.classList.add("listening");
+      micBtn.title = "点击停止语音识别";
+      voiceIndicator.classList.remove("hidden");
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      micBtn.classList.remove("listening");
+      micBtn.title = "点击开始语音识别";
+      voiceIndicator.classList.add("hidden");
+      // 自动重启（保持连续聆听）
+      if (recognition._shouldRestart) {
+        try { recognition.start(); } catch (e) {}
+      }
+    };
+
+    recognition.onresult = (event) => {
+      const last = event.results[event.results.length - 1];
+      if (!last.isFinal) return;
+      // 尝试所有候选，找第一个能解析的
+      for (let i = 0; i < last.length; i++) {
+        const text = last[i].transcript.trim();
+        if (text) {
+          input.value = text;
+          showToast("🎤 " + text, true);
+          sendCommand(text);
+          break;
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "no-speech") return; // 正常：没说话
+      if (event.error === "aborted") return;
+      console.warn("Speech recognition error:", event.error);
+      if (event.error === "not-allowed") {
+        showToast("⚠ 请允许麦克风权限", false);
+        micBtn.classList.add("unsupported");
+      }
+    };
+
+    micBtn.addEventListener("click", () => {
+      if (isListening) {
+        recognition._shouldRestart = false;
+        recognition.stop();
+      } else {
+        recognition._shouldRestart = true;
+        try { recognition.start(); } catch (e) {
+          showToast("⚠ 语音识别启动失败", false);
+        }
+      }
+    });
+
+    // 快捷键：按住空格说话
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && e.target !== input && !isListening) {
+        e.preventDefault();
+        recognition._shouldRestart = false;
+        try { recognition.start(); } catch (err) {}
+      }
+    });
+    document.addEventListener("keyup", (e) => {
+      if (e.code === "Space" && e.target !== input && isListening) {
+        recognition._shouldRestart = false;
+        recognition.stop();
+      }
+    });
+  } else {
+    micBtn.classList.add("unsupported");
+    micBtn.title = "浏览器不支持语音识别（请使用 Chrome/Edge）";
+    micBtn.disabled = true;
+  }
+
   // Initial state fetch
   fetch("/api/state")
     .then((r) => r.json())
