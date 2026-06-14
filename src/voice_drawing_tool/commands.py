@@ -180,7 +180,7 @@ _ZH_EN_MAP = {
     '流星': 'starfall', '流星雨': 'starfall', '放流星': 'starfall',
     '下雪': 'snow', '下雪了': 'snow', '雪': 'snow', '飘雪': 'snow',
     '停雪': 'stop snow', '雪停': 'stop snow', '停止下雪': 'stop snow',
-    '泡泡': 'bubbles', '吹泡泡': 'bubbles', '放泡泡': 'bubbles',
+    '泡泡': 'bubbles', '气泡': 'bubbles', '吹泡泡': 'bubbles', '放泡泡': 'bubbles',
     '停泡泡': 'stop bubbles', '泡泡停': 'stop bubbles', '停止泡泡': 'stop bubbles',
     '极光': 'aurora', '放极光': 'aurora', '画极光': 'aurora',
     '停极光': 'stop aurora', '极光停': 'stop aurora', '停止极光': 'stop aurora',
@@ -286,7 +286,7 @@ _SPEECH_FIX_MAP = {
     '花园': '画圆', '花圆': '画圆', '欢迎': '画圆', '画云': '画圆',
     '画房': '画方', '画放': '画方', '花房': '画方',
     '发送': '画三角', '三星': '三角形', '山角形': '三角形',
-    '三脚形': '三角形', '三甲型': '三角形', '上角': '三角',
+    '三脚形': '三角形', '三甲型': '三角形', '三上角': '三角形',
     '五角形': '五角星', '无心': '五角星', '舞星': '五角星',
     '画先': '画线', '画现': '画线', '花线': '画线',
     '红云': '红圆', '宏愿': '红圆', '红园': '红圆',
@@ -2475,10 +2475,12 @@ class CommandParser:
         if cmd:
             return cmd
         # 拼音模糊匹配：用原始中文文本做拼音近似匹配
-        cmd = self._pinyin_fallback(text)
+        # fuzzy_fallback 先于 pinyin_fallback，因为 zh_to_en 已正确翻译时
+        # 模糊匹配更可靠（避免 pinyin 误匹配，如 "画矩形"→"环形"→DrawRingCommand）
+        cmd = self._fuzzy_fallback(text_en)
         if cmd:
             return cmd
-        cmd = self._fuzzy_fallback(text_en)
+        cmd = self._pinyin_fallback(text)
         if cmd:
             return cmd
 

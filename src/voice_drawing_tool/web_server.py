@@ -271,6 +271,24 @@ class WebApp:
                                             self.canvas.cursor_y)
             if cmd is not None:
                 return cleaned
+        # 所有原始文本都解析失败时，尝试 fix_speech_text 修正后重试
+        if candidates:
+            from .commands import fix_speech_text, zh_to_en
+            t = candidates[0].strip().rstrip('。，！？；：,.!?;:')
+            fixed = fix_speech_text(t)
+            if fixed != t:
+                cmd = self.parser.parse_command(fixed,
+                                                self.canvas.cursor_x,
+                                                self.canvas.cursor_y)
+                if cmd is not None:
+                    return fixed
+            # 最后尝试：直接英文翻译 + 模糊匹配
+            en = zh_to_en(fixed)
+            cmd = self.parser.parse_command(en,
+                                            self.canvas.cursor_x,
+                                            self.canvas.cursor_y)
+            if cmd is not None:
+                return en
         return None
 
     def _get_suggestion(self, text: str) -> str:

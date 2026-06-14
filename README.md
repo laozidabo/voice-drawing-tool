@@ -12,7 +12,7 @@ A Chinese voice-controlled drawing application. Speak commands in Chinese to cre
 
 ### Demo
 
-Demo video: [bilibili](https://www.bilibili.com/video/BV_PLACEHOLDER) | [GitHub Release](https://github.com/laozidabo/voice-drawing-tool/releases/download/v1.0.0/demo.mp4)
+Demo video: [bilibili](https://www.bilibili.com/video/BV1LgJK6bExk)
 
 ### Quick Start
 
@@ -95,6 +95,10 @@ Open http://localhost:5000 in your browser.
 | "你好" misparsed as confirm | `'好': 'confirm'` in `_ZH_EN_MAP` | Removed overspecific mapping |
 | No-coordinate commands failed regex | `_parse_single` patterns required coords | Added 10 short-form patterns without coordinate requirement |
 | Whisper hallucination artifacts | Repeated phrases, homophone errors | `_dedup_whisper_text` + expanded fix maps |
+| "左上角" corrupted to "左三角" | `'上角': '三角'` in `_SPEECH_FIX_MAP` was too broad | Replaced with `'三上角': '三角形'` |
+| "画矩形" misrouted to DrawRingCommand | `_pinyin_fallback` matched "huajuxing" → "huanxing" (ring) | Moved `_fuzzy_fallback` before `_pinyin_fallback` |
+| "气泡" not recognized | `'气泡'` missing from `_ZH_EN_MAP` | Added `'气泡': 'bubbles'` |
+| Web audio garbled → always "未识别" | Browser mic sample rate (44.1kHz) not resampled to 16kHz for Whisper | Added linear resampling in `_transcribe_whisper` |
 
 #### Unfinished / Known Limitations
 
@@ -199,6 +203,10 @@ python -m voice_drawing_tool --speech
 | "你好"被误解析为确认 | `'好': 'confirm'` 映射过于宽泛 | 移除该映射 |
 | 无坐标指令正则匹配失败 | `_parse_single` 模式要求坐标 | 新增 10 条无坐标简写模式 |
 | Whisper 幻觉产物 | 重复短语、同音错字 | `_dedup_whisper_text` + 扩充纠错映射表 |
+| "左上角"被误转为"左三角" | `'上角': '三角'` 纠错过泛 | 替换为 `'三上角': '三角形'` |
+| "画矩形"误路由到 DrawRingCommand | 拼音匹配 "huajuxing"→"huanxing"(环形) | 调换 `_fuzzy_fallback` 与 `_pinyin_fallback` 顺序 |
+| "气泡"无法识别 | `_ZH_EN_MAP` 缺少 `'气泡'` | 添加 `'气泡': 'bubbles'` |
+| Web 音频一直"未识别" | 浏览器麦克风采样率(44.1kHz)未重采样到 16kHz | `_transcribe_whisper` 中增加线性重采样 |
 
 #### 未完成 & 已知限制
 

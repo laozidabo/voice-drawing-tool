@@ -718,6 +718,15 @@ class SpeechRecognizer:
             # 16-bit PCM bytes → float32 numpy 数组（Whisper 直接接受）
             audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
+            # 浏览器可能以非 16kHz 采样率发送，faster-whisper 要求 16kHz
+            if sample_rate != 16000:
+                target_len = int(len(audio_np) * 16000 / sample_rate)
+                audio_np = np.interp(
+                    np.linspace(0, len(audio_np) - 1, target_len),
+                    np.arange(len(audio_np)),
+                    audio_np
+                ).astype(np.float32)
+
             # 临时切换 locale 为 C，修复 PyAV 的 os.strerror() ASCII 解码 bug
             old_locale = locale.getlocale()
             try:
