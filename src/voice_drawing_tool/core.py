@@ -326,7 +326,7 @@ class DrawingCanvas:
                     cmd_count: int = 0, session_duration: float = 0.0,
                     dt: float = 0.0) -> np.ndarray:
         self._cache_static_ui()
-        BAR_H = 28
+        BAR_H = 32
         total_h = self.HEIGHT + BAR_H * 2
         total_w = self.WIDTH
         BAR_TEXT_DIM = (150, 140, 135)
