@@ -4,17 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>语音绘图工具</title>
-<link rel="stylesheet" href="/static/style.css">
-<script src="/static/socket.io.min.js"></script>
+<link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
 
-<!-- 顶部状态栏 -->
 <header class="top-bar">
   <div class="top-left">
     <span class="logo">🎤</span>
     <h1>语音绘图</h1>
-    <span class="badge" id="status-badge">● 连接中…</span>
+    <span class="badge" id="status-badge">● 就绪</span>
   </div>
   <div class="top-right">
     <span class="stat"><span class="label">指令</span><span id="cmd-count">0</span></span>
@@ -22,32 +20,139 @@
   </div>
 </header>
 
-<!-- 画布区域 -->
 <div class="canvas-full">
   <div class="canvas-wrapper">
     <img id="canvas-img" src="/api/preview" alt="画布">
-    <!-- 语音状态指示 -->
     <div id="voice-indicator" class="voice-indicator">
       <div class="voice-wave"><span></span><span></span><span></span><span></span><span></span></div>
-      <span class="voice-label" id="voice-label">正在聆听…</span>
+      <span class="voice-label" id="voice-label">等待启动</span>
     </div>
-    <!-- 反馈提示 -->
     <div id="feedback-toast" class="toast hidden"></div>
-    <!-- 欢迎提示（首次打开） -->
     <div id="welcome-overlay" class="welcome-overlay">
       <div class="welcome-content">
         <h2>🎤 语音绘图工具</h2>
         <p>纯语音交互，说出指令即可绘图</p>
-        <button id="start-mic" class="start-mic-btn">🎤 点击启动语音识别</button>
+        <button id="start-mic" class="start-mic-btn" onclick="startApp()">🎤 点击启动语音识别</button>
         <div class="welcome-examples">
           <span>画红圆</span><span>画房子</span><span>画太阳在上面</span>
           <span>撤销</span><span>清空</span><span>保存</span>
         </div>
+        <p id="debug-log" style="font-size:11px;color:#666;margin-top:12px;"></p>
       </div>
     </div>
   </div>
 </div>
 
-<script src="/static/app.js"></script>
+<script>
+function log(msg) {
+  var el = document.getElementById('debug-log');
+  if (el) el.textContent += msg + ' | ';
+  console.log('[Voice]', msg);
+}
+
+var recognition = null;
+var isListening = false;
+
+function startApp() {
+  log('按钮已点击');
+  document.getElementById('welcome-overlay').classList.add('hidden');
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    log('浏览器不支持 SpeechRecognition');
+    setVoiceLabel('浏览器不支持语音', true);
+    return;
+  }
+  log('SpeechRecognition 可用');
+
+  recognition = new SR();
+  recognition.lang = 'zh-CN';
+  recognition.continuous = true;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 3;
+
+  recognition.onstart = function() {
+    isListening = true;
+    log('语音识别已启动');
+    setVoiceLabel('正在聆听…', false);
+  };
+
+  recognition.onend = function() {
+    isListening = false;
+    log('语音识别结束，重启中…');
+    if (recognition._active) {
+      try { recognition.start(); } catch(e) { log('重启失败: ' + e.message); }
+    }
+  };
+
+  recognition.onresult = function(event) {
+    var last = event.results[event.results.length - 1];
+    if (!last.isFinal) return;
+    var text = last[0].transcript.trim();
+    log('识别: ' + text);
+    setVoiceLabel('🎤 ' + text, false);
+    sendCommand(text);
+  };
+
+  recognition.onerror = function(event) {
+    log('语音错误: ' + event.error);
+    if (event.error === 'not-allowed') {
+      setVoiceLabel('请允许麦克风权限', true);
+    }
+  };
+
+  recognition._active = true;
+  try {
+    recognition.start();
+    log('正在启动…');
+  } catch(e) {
+    log('启动失败: ' + e.message);
+  }
+}
+
+function setVoiceLabel(text, isError) {
+  var indicator = document.getElementById('voice-indicator');
+  var label = document.getElementById('voice-label');
+  label.textContent = text;
+  if (isError) indicator.classList.add('error');
+  else indicator.classList.remove('error');
+}
+
+function sendCommand(text) {
+  fetch('/api/command', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({text: text})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    showToast(data.feedback, data.ok);
+    document.getElementById('canvas-img').src = '/api/preview?t=' + Date.now();
+    document.getElementById('cmd-count').textContent = data.cmd_count || '';
+  })
+  .catch(function() { showToast('网络错误', false); });
+}
+
+var toastTimer;
+function showToast(msg, ok) {
+  var toast = document.getElementById('feedback-toast');
+  toast.textContent = msg;
+  toast.className = 'toast ' + (ok ? 'success' : 'error');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function() { toast.classList.add('hidden'); }, 3500);
+}
+
+// 定期刷新画布和状态
+setInterval(function() {
+  var img = document.getElementById('canvas-img');
+  img.src = '/api/preview?t=' + Date.now();
+  fetch('/api/state').then(function(r) { return r.json(); }).then(function(s) {
+    document.getElementById('cmd-count').textContent = s.cmd_count;
+    var mm = String(Math.floor(s.session_duration / 60)).padStart(2, '0');
+    var ss = String(s.session_duration % 60).padStart(2, '0');
+    document.getElementById('duration').textContent = mm + ':' + ss;
+  }).catch(function(){});
+}, 2000);
+</script>
 </body>
 </html>
