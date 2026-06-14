@@ -120,8 +120,6 @@ class DrawingCanvas:
         self.last_command_params: Dict[str, str] = {}
         self.cursor_x = self.WIDTH // 2
         self.cursor_y = self.HEIGHT // 2
-        self._freehand_mode = False
-        self._freehand_points = []
         self._shape_count = 0
         self._cached_top_bar: Optional[np.ndarray] = None
         self._cached_bottom_bar: Optional[np.ndarray] = None
@@ -251,19 +249,6 @@ class DrawingCanvas:
         cv2.ellipse(self.image, (int(cx), int(cy)), (int(r), int(r)),
                      0, int(start_angle), int(end_angle), color_val, int(width), cv2.LINE_AA)
 
-    def draw_freehand(self, points, color=None, width=2):
-        """Draw connected lines through a list of (x, y) points."""
-        if len(points) < 2:
-            return
-        self._save_state()
-        color_val = color or self.pen_color
-        width_val = int(width)
-        for i in range(1, len(points)):
-            cv2.line(self.image,
-                     (int(points[i-1][0]), int(points[i-1][1])),
-                     (int(points[i][0]), int(points[i][1])),
-                     color_val, width_val, cv2.LINE_AA)
-
     def draw_arrow_line(self, x1, y1, x2, y2, color=None, width=2):
         self._save_state()
         color_val = color or self.pen_color
@@ -324,6 +309,8 @@ class DrawingCanvas:
         self._save_state()
         self.image[:] = self.BG_COLOR
         self._shape_count = 0
+        self.last_command_type = None
+        self.last_command_params = {}
 
     def undo(self) -> bool:
         if not self.history:
@@ -618,10 +605,10 @@ class SpeechRecognizer:
             text = ' '.join(tokens)
 
         # 2. 去除句内重复短语（不依赖空格，如 "画一角形画一角形"）
-        #    尝试从长到短匹配重复子串
+        #    尝试从长到短匹配重复子串（必须从开头匹配）
         for length in range(len(text) // 2, 2, -1):
             substr = text[:length]
-            if substr * 2 in text:
+            if text.startswith(substr * 2):
                 text = substr
                 break
 
@@ -931,7 +918,6 @@ class VoiceDrawingApp:
         if self.gui:
             cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(self.WINDOW_NAME, 800, 668)
-            cv2.setMouseCallback(self.WINDOW_NAME, self._on_mouse)
             print("[GUI] 绘图窗口已创建")
             print("\n" + "="*60)
             print("  🎤 语音绘图工具已启动!")
@@ -1074,29 +1060,6 @@ class VoiceDrawingApp:
         remaining = int(5.0 - (time.time() - self._pending_confirm_time))
         put_chinese_text(img, f"按回车清空画布 ({remaining}秒)",
                         (w // 2 - 200, h // 2 + 5), 22, (100, 180, 255))
-
-    def _on_mouse(self, event, x, y, flags, param):
-        """Handle mouse events for freehand drawing mode."""
-        if not self.canvas._freehand_mode:
-            return
-        BAR_H = 28
-        canvas_x = x
-        canvas_y = y - BAR_H
-        if canvas_x < 0 or canvas_x >= self.canvas.WIDTH or canvas_y < 0 or canvas_y >= self.canvas.HEIGHT:
-            return
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self.canvas._save_state()
-            self.canvas._freehand_points = [(canvas_x, canvas_y)]
-        elif event == cv2.EVENT_MOUSEMOVE and (flags & cv2.EVENT_FLAG_LBUTTON):
-            if self.canvas._freehand_points:
-                self.canvas._freehand_points.append((canvas_x, canvas_y))
-                prev = self.canvas._freehand_points[-2]
-                cv2.line(self.canvas.image, prev, (canvas_x, canvas_y),
-                         self.canvas.pen_color, self.canvas.pen_width, cv2.LINE_AA)
-        elif event == cv2.EVENT_LBUTTONUP:
-            if self.canvas._freehand_points:
-                self.canvas._shape_count += 1
-            self.canvas._freehand_points = []
 
     def _speech_loop(self):
         while self.running:
@@ -1268,7 +1231,7 @@ class VoiceDrawingApp:
         self._unrecognized_count = 0
         self._last_command_text = text
         # Confirmation for destructive commands
-        from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, DrawFreehandCommand, RepeatLastWithVariationCommand
+        from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, RepeatLastWithVariationCommand
         if isinstance(cmd, ClearCanvasCommand):
             self._pending_confirm = "清空"
             self._pending_confirm_time = time.time()
@@ -1290,7 +1253,7 @@ class VoiceDrawingApp:
                                ClearCanvasCommand, UndoCommand, RedoCommand,
                                SetColorCommand, SetWidthCommand, SetBackgroundCommand,
                                CompositeCommand, MoveCursorCommand, SetCursorCommand,
-                               DrawFreehandCommand, RepeatLastWithVariationCommand)
+                               RepeatLastWithVariationCommand)
         if isinstance(cmd, CompositeCommand):
             self.canvas.last_command_type = CompositeCommand
             self.canvas.last_command_params = {
@@ -1319,7 +1282,7 @@ class VoiceDrawingApp:
                                   ClearCanvasCommand, UndoCommand, RedoCommand,
                                   SetColorCommand, SetWidthCommand, SetBackgroundCommand,
                                   MoveCursorCommand, SetCursorCommand,
-                                  DrawFreehandCommand, RepeatLastWithVariationCommand)):
+                                  RepeatLastWithVariationCommand)):
             self.canvas.last_command_type = type(cmd)
             self.canvas.last_command_params = getattr(cmd, 'params', {})
             self.canvas._shape_count += 1

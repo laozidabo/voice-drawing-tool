@@ -64,6 +64,8 @@ _ZH_EN_MAP = {
     '菱形': 'diamond', '判断框': 'diamond',
     '箭头': 'arrow', '箭头线': 'arrow', '带箭头': 'arrow',
     '圆角矩形': 'rounded rectangle', '圆角框': 'rounded rectangle', '圆角': 'rounded',
+    '笑脸': 'smiley',
+    '小人': 'person', '人': 'person', '画个小人': 'person', '画个人': 'person',
     '流程': 'flowchart', '流程图': 'flowchart', '开始': 'flowchart', '结束': 'flowchart',
     '环': 'ring', '圆环': 'ring', '环形': 'ring', '空心圆': 'ring',
     '填充的': 'filled', '实心的': 'filled', '填充': 'filled', '实心': 'filled',
@@ -163,7 +165,6 @@ _ZH_EN_MAP = {
     '小花': 'small flower', '大花': 'big flower',
     '小太阳': 'small sun', '大太阳': 'big sun',
     '小山': 'small mountain', '高山': 'big mountain',
-    '画笔': 'freehand', '自由画': 'freehand', '随便画': 'freehand', '手绘': 'freehand',
     '再来一个': 'repeat variation',
     # Animation commands
     '下雨': 'rain', '下点雨': 'rain', '开始下雨': 'rain',
@@ -334,6 +335,8 @@ COLOR_MAP = {
     'lime': (0, 255, 128),
     'gold': (41, 215, 255),
     'silver': (192, 192, 192),
+    'skin': (180, 210, 240),
+    'darkbrown': (30, 65, 130),
 }
 
 COLOR_NAMES = '|'.join(COLOR_MAP.keys())
@@ -999,6 +1002,15 @@ class SceneTemplate:
         ("draw a black filled circle at 440,260 radius 15", "eye right"),
         ("draw a red ellipse at 400,340 rx 60 ry 30 width 4", "mouth"),
     ]
+    PERSON = [
+        ("draw a skin filled circle at 400,245 radius 20", "head"),
+        ("draw a darkbrown ellipse at 400,234 rx 22 ry 8 filled", "hair"),
+        ("draw a skin line from 400,262 to 400,300 width 7", "body"),
+        ("draw a skin line from 400,270 to 380,290 width 4", "left arm"),
+        ("draw a skin line from 400,270 to 420,290 width 4", "right arm"),
+        ("draw a skin line from 400,300 to 394,340 width 6", "left leg"),
+        ("draw a skin line from 400,300 to 406,340 width 6", "right leg"),
+    ]
     TINY_HOUSE = [
         ("draw a brown rectangle from 150,300 to 350,500", "house body"),
         ("draw a red triangle with points 150,300 250,200 350,300", "roof"),
@@ -1044,6 +1056,7 @@ class CommandDecomposer:
             'sun': SceneTemplate.SUN,
             'flower': SceneTemplate.FLOWER,
             'smiley': SceneTemplate.SMILEY,
+            'person': SceneTemplate.PERSON,
             'flowchart': SceneTemplate.FLOWCHART,
             'flow': SceneTemplate.FLOWCHART,
             'process': SceneTemplate.FLOWCHART_PROCESS,
@@ -1058,6 +1071,7 @@ class CommandDecomposer:
             'sun': 'sun',
             'flower': 'flower', 'blossom': 'flower',
             'smiley': 'smiley', 'smile': 'smiley', 'face': 'smiley',
+            'person': 'person', 'man': 'person', 'woman': 'person', 'kid': 'person', 'child': 'person',
             'flowchart': 'flowchart', 'flow': 'flowchart',
             'process': 'process',
         }
@@ -1874,8 +1888,6 @@ class CommandParser:
              lambda m: DrawDiamondCommand({**m.groupdict(), 'filled': 'true' if 'filled' in m.group(0) else 'false'})),
             (r"(?:save|export)\s+(?:the\s+)?(?:drawing|canvas|file)?\s*(?:as\s+)?(?P<filename>[\w./\\-]+)?",
              lambda m: SaveCommand(m.groupdict())),
-            (r"freehand",
-             lambda m: DrawFreehandCommand()),
             (rf"repeat\s+variation\s+(?P<color>{COLOR_NAMES})",
              lambda m: RepeatLastWithVariationCommand({'color': m.group('color')})),
             (r"repeat\s+variation",
@@ -2332,20 +2344,6 @@ class CommandParser:
                 seen.add(s)
                 unique.append(s)
         return SuggestionCommand(unique[:5], text_en)
-
-
-class DrawFreehandCommand(Command):
-    """Toggle freehand drawing mode on/off."""
-
-    def execute(self, canvas) -> str:
-        canvas._freehand_mode = not canvas._freehand_mode
-        canvas._freehand_points = []
-        if canvas._freehand_mode:
-            return "freehand mode ON - drag mouse to draw"
-        return "freehand mode OFF"
-
-    def get_description(self) -> str:
-        return "toggle freehand mode"
 
 
 class RepeatLastWithVariationCommand(Command):
