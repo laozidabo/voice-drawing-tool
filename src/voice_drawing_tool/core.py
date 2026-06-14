@@ -464,6 +464,44 @@ _DRAWING_PROMPT = (
 )
 
 
+class VoiceFeedback:
+    """语音反馈 — 使用 pyttsx3 播报执行结果。"""
+
+    def __init__(self):
+        self._engine = None
+        self._thread = None
+        self._queue: list = []
+        self._running = True
+        try:
+            import pyttsx3
+            self._engine = pyttsx3.init()
+            self._engine.setProperty('rate', 160)
+            self._engine.setProperty('volume', 0.9)
+            import threading
+            self._thread = threading.Thread(target=self._loop, daemon=True)
+            self._thread.start()
+            print("[语音反馈] pyttsx3 引擎已加载")
+        except Exception as e:
+            print(f"[语音反馈] 不可用: {e}")
+
+    def speak(self, text: str):
+        if self._engine:
+            self._queue.append(text)
+
+    def _loop(self):
+        while self._running:
+            if self._queue:
+                text = self._queue.pop(0)
+                try:
+                    self._engine.say(text)
+                    self._engine.runAndWait()
+                except Exception:
+                    pass
+            else:
+                import time as _t
+                _t.sleep(0.1)
+
+
 class SpeechRecognizer:
     """语音识别器，优先使用 faster-whisper（本地离线），备选 Google API。"""
 
@@ -637,8 +675,8 @@ class SpeechRecognizer:
                     tmp_path,
                     language="zh",
                     initial_prompt=_DRAWING_PROMPT,
-                    beam_size=10,          # 增大搜索宽度，提升准确率
-                    best_of=5,             # 生成 5 个候选取最佳
+                    beam_size=5,           # 平衡精度与延迟
+                    best_of=3,             # 减少候选数，降低延迟
                     condition_on_previous_text=False,  # 防止幻觉级联
                     repetition_penalty=1.3,  # 抑制重复短语
                     no_repeat_ngram_size=3,  # 禁止 3-gram 重复
@@ -887,6 +925,7 @@ class VoiceDrawingApp:
         self._cmd_count = 0
         self._session_start = time.time()
         self.debug = '--debug' in sys.argv
+        self._voice_feedback = VoiceFeedback()
 
     def run(self):
         if self.use_speech:
@@ -1058,12 +1097,11 @@ class VoiceDrawingApp:
                 print()
                 chosen = self._pick_best_transcript(texts)
                 if chosen:
-                    # 语音识别后等待确认，用户可以直接回车确认或输入修正
-                    print(f"[预览] 将执行: \"{chosen}\"")
-                    print(f"[预览] 按回车确认，或输入修正指令：", end="", flush=True)
-                    # 不直接放入队列，等待用户确认
-                    self._pending_speech_cmd = chosen
+                    print(f"[执行] \"{chosen}\"")
+                    self.cmd_queue.put(chosen)
                     self.recognizer._cooldown_until = time.time() + 0.4
+                else:
+                    self._voice_feedback.speak("没听清，请再说一次")
             else:
                 self._idle_count += 1
                 if self._idle_count == 1:
@@ -1168,6 +1206,7 @@ class VoiceDrawingApp:
                 print("[取消] 撤销上一步")
                 self.canvas.undo()
                 self._set_feedback("↩ 已撤销")
+                self._voice_feedback.speak("已撤销")
                 continue
             self._last_speech_text = text
             # Close overlays on any command
@@ -1201,28 +1240,65 @@ class VoiceDrawingApp:
                 msg = "试试简单指令: 红圆 / 画房子 / 撤销 / 帮助"
                 print(f"  → 提示: {msg}")
                 self._set_feedback(f"💡 {msg}", is_error=True)
+                self._voice_feedback.speak("没听清，请试试说红圆，画房子，或撤销")
+            else:
+                self._voice_feedback.speak("没听清，请再说一次")
             return
         self._unrecognized_count = 0
         self._last_command_text = text
-        # Confirmation for destructive commands
+        # Confirmation for destructive commands — voice-based
         from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, RepeatLastWithVariationCommand
         if isinstance(cmd, ClearCanvasCommand):
+            if self._pending_confirm == "清空" and time.time() - self._pending_confirm_time < 5.0:
+                self._pending_confirm = None
+                self.canvas.clear()
+                self._cmd_count += 1
+                self._set_feedback("✓ 画布已清空")
+                self._voice_feedback.speak("画布已清空")
+                print("[确认] 画布已清空")
+                return
             self._pending_confirm = "清空"
             self._pending_confirm_time = time.time()
-            self._set_feedback("⚠ 按回车清空画布")
+            self._set_feedback("⚠ 再说一次清空以确认 (5秒内)")
+            self._voice_feedback.speak("请再说一次清空来确认")
             return
         elif isinstance(cmd, UndoCommand):
+            if self._pending_confirm == "撤销" and time.time() - self._pending_confirm_time < 5.0:
+                self._pending_confirm = None
+                self.canvas.undo()
+                self._cmd_count += 1
+                self._set_feedback("↩ 已撤销")
+                self._voice_feedback.speak("已撤销")
+                print("[确认] 已撤销")
+                return
             self._pending_confirm = "撤销"
             self._pending_confirm_time = time.time()
-            self._set_feedback("⚠ 按回车撤销 (5秒内)")
+            self._set_feedback("⚠ 再说一次撤销以确认 (5秒内)")
+            self._voice_feedback.speak("请再说一次撤销来确认")
             return
         elif isinstance(cmd, ConfirmCommand):
-            pass  # no longer used; Enter key handles confirmation
+            if self._pending_confirm:
+                action = self._pending_confirm
+                self._pending_confirm = None
+                if action == "清空":
+                    self.canvas.clear()
+                    self._cmd_count += 1
+                    self._set_feedback("✓ 画布已清空")
+                    self._voice_feedback.speak("画布已清空")
+                elif action == "撤销":
+                    self.canvas.undo()
+                    self._cmd_count += 1
+                    self._set_feedback("↩ 已撤销")
+                    self._voice_feedback.speak("已撤销")
+            return
         result = cmd.execute(self.canvas)
         self._cmd_count += 1
         print(f"[执行] {result}")
-        cv2.imwrite('/tmp/voice_drawing_autosave.png', self.canvas.image)
         self._set_feedback(f"🎤 {self._last_speech_text[:40]} → {result}")
+        # 语音播报结果
+        self._voice_feedback.speak(self._make_voice_summary(cmd, result))
+        # 异步自动保存
+        threading.Thread(target=cv2.imwrite, args=('/tmp/voice_drawing_autosave.png', self.canvas.image.copy()), daemon=True).start()
         from .commands import (MoveLastCommand, ScaleLastCommand, ConfirmCommand,
                                ClearCanvasCommand, UndoCommand, RedoCommand,
                                SetColorCommand, SetWidthCommand, SetBackgroundCommand,
@@ -1269,6 +1345,61 @@ class VoiceDrawingApp:
                 if hasattr(cmd, attr):
                     self.canvas.cursor_y = getattr(cmd, attr)
                     break
+
+    def _make_voice_summary(self, cmd, result: str) -> str:
+        """生成语音播报摘要，简洁明了。"""
+        from .commands import (
+            DrawCircleCommand, DrawFilledCircleCommand, DrawRectangleCommand,
+            DrawSquareCommand, DrawTriangleCommand, DrawStarCommand,
+            DrawEllipseCommand, DrawLineCommand, DrawTextCommand,
+            SetColorCommand, SetWidthCommand, CompositeCommand,
+            StartRainCommand, StopRainCommand, StartSnowCommand, StopSnowCommand,
+            StartFirefliesCommand, FireworksCommand, StartAuroraCommand,
+            StopAllAnimationsCommand, SaveCommand,
+        )
+        if isinstance(cmd, DrawCircleCommand):
+            return "画了一个圆"
+        if isinstance(cmd, DrawFilledCircleCommand):
+            return "画了一个实心圆"
+        if isinstance(cmd, DrawRectangleCommand):
+            return "画了一个矩形"
+        if isinstance(cmd, DrawSquareCommand):
+            return "画了一个正方形"
+        if isinstance(cmd, DrawTriangleCommand):
+            return "画了一个三角形"
+        if isinstance(cmd, DrawStarCommand):
+            return "画了一个五角星"
+        if isinstance(cmd, DrawEllipseCommand):
+            return "画了一个椭圆"
+        if isinstance(cmd, DrawLineCommand):
+            return "画了一条线"
+        if isinstance(cmd, DrawTextCommand):
+            return f"写了{cmd.text}"
+        if isinstance(cmd, SetColorCommand):
+            return f"颜色设为{cmd.color_name}"
+        if isinstance(cmd, SetWidthCommand):
+            return f"线宽设为{cmd.width}"
+        if isinstance(cmd, CompositeCommand):
+            return f"完成了{cmd._description}"
+        if isinstance(cmd, StartRainCommand):
+            return "开始下雨"
+        if isinstance(cmd, StopRainCommand):
+            return "雨停了"
+        if isinstance(cmd, StartSnowCommand):
+            return "开始下雪"
+        if isinstance(cmd, StopSnowCommand):
+            return "雪停了"
+        if isinstance(cmd, StartFirefliesCommand):
+            return "萤火虫来了"
+        if isinstance(cmd, FireworksCommand):
+            return "砰"
+        if isinstance(cmd, StartAuroraCommand):
+            return "极光出现了"
+        if isinstance(cmd, StopAllAnimationsCommand):
+            return "动画已停止"
+        if isinstance(cmd, SaveCommand):
+            return "已保存"
+        return "完成"
 
     def feed_command(self, text: str):
         self.cmd_queue.put(text)
