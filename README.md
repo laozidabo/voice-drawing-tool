@@ -2,6 +2,10 @@
 
 A Chinese voice-controlled drawing application. Speak commands in Chinese to create shapes, scenes, and artwork on an 800x600 canvas. Runs fully offline using Whisper speech recognition with pinyin-based fuzzy matching for robust command parsing.
 
+## Demo
+
+Demo video: [bilibili](https://www.bilibili.com/video/BV_PLACEHOLDER) | [GitHub Release](https://github.com/laozidabo/voice-drawing-tool/releases/download/v1.0.0/demo.mp4)
+
 ## Features
 
 - **Offline Speech Recognition**: Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (small model, ~460MB) for fully local, offline Chinese speech recognition -- no internet required
