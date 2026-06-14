@@ -1,41 +1,49 @@
 import sys
+import webbrowser
 import threading
-import time as _time
+
+
+def _check_deps():
+    """检查 Web 依赖是否安装，给出友好提示。"""
+    missing = []
+    for mod in ("flask", "flask_socketio"):
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(mod)
+    if missing:
+        print("=" * 50)
+        print("  ❌ 缺少依赖: " + ", ".join(missing))
+        print()
+        print("  请先激活虚拟环境并安装依赖:")
+        print("    source venv/bin/activate")
+        print("    pip install -r requirements.txt")
+        print()
+        print("  或直接使用 venv 运行:")
+        print("    venv/bin/python -m voice_drawing_tool")
+        print("=" * 50)
+        sys.exit(1)
 
 
 def main():
-    if "--web" in sys.argv:
-        from .web_server import WebApp
-        use_speech = "--speech" in sys.argv
-        app = WebApp(use_speech=use_speech)
-        port = 5000
-        for i, arg in enumerate(sys.argv):
-            if arg == "--port" and i + 1 < len(sys.argv):
-                port = int(sys.argv[i + 1])
-        app.run(port=port)
-        return
+    _check_deps()
+    from .web_server import WebApp
+    use_speech = "--speech" in sys.argv
+    port = 5000
+    for i, arg in enumerate(sys.argv):
+        if arg == "--port" and i + 1 < len(sys.argv):
+            port = int(sys.argv[i + 1])
 
-    from .core import VoiceDrawingApp
-    gui = None if "--no-gui" not in sys.argv else False
-    use_speech = "--speech" in sys.argv or ("--no-gui" not in sys.argv and "--no-speech" not in sys.argv)
-    app = VoiceDrawingApp(use_speech=use_speech, gui=gui)
-    app.running = True
+    app = WebApp(use_speech=use_speech)
 
-    print("=" * 50)
-    print("  语音控制绘图工具 (Voice Drawing Tool)")
-    print("=" * 50)
-    print("说 'help' 查看可用指令")
-    print("说 'exit' 或 'quit' 退出")
-    print()
+    # 自动打开浏览器
+    def _open_browser():
+        import time
+        time.sleep(1.2)
+        webbrowser.open(f"http://localhost:{port}")
 
-    # GUI 需要在主线程运行（Linux OpenCV 要求）
-    try:
-        app.run()
-    except KeyboardInterrupt:
-        pass
-
-    app.running = False
-    print("已退出")
+    threading.Thread(target=_open_browser, daemon=True).start()
+    app.run(port=port)
 
 
 if __name__ == "__main__":

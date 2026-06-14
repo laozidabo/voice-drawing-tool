@@ -1,9 +1,11 @@
-# AGENTS.md
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Quick start
 
 ```bash
-# Install dependencies (includes faster-whisper ~142MB base model on first run)
+# Install dependencies (includes faster-whisper ~460MB model on first run)
 pip install -r requirements.txt
 
 # Run tests (manual runner, 23 tests)
@@ -91,7 +93,7 @@ python test_voice_drawing.py
 
 - `portaudio` (system package) for microphone access with faster-whisper
 - CJK font (e.g., `noto-fonts-cjk`) for Chinese text on canvas
-- faster-whisper downloads ~142MB model (base, int8) on first run
+- faster-whisper downloads ~460MB model (small, int8) on first run
 
 ## Tips for AI agents
 

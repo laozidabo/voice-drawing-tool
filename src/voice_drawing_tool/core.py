@@ -7,12 +7,11 @@ import queue
 import sys
 from typing import Optional, List, Dict
 
+# Force X11 backend for OpenCV (avoids Wayland Qt plugin errors)
+# Removed HiDPI scaling vars that caused blurry rendering in desktop mode
 os.environ.pop('WAYLAND_DISPLAY', None)
 os.environ['QT_QPA_PLATFORM'] = 'xcb'
 os.environ['QT_LOGGING_RULES'] = '*.debug=false;qt.qpa.*=false'
-os.environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = '1'
-os.environ['QT_ENABLE_HIGHDPI_SCALING'] = '1'
-os.environ['QT_SCALE_FACTOR_ROUNDING_POLICY'] = 'PassThrough'
 
 try:
     import numpy as np
@@ -103,8 +102,8 @@ def put_chinese_text(img, text, position, font_size=20, color=(255, 255, 255)):
 
 
 class DrawingCanvas:
-    WIDTH = 800
-    HEIGHT = 600
+    WIDTH = 1200
+    HEIGHT = 900
     BG_COLOR = (245, 248, 250)  # warm off-white (BGR of RGB 250,248,245)
 
     def __init__(self):
@@ -130,7 +129,7 @@ class DrawingCanvas:
     def _cache_static_ui(self):
         if self._cached_top_bar is not None:
             return
-        BAR_H = 32
+        BAR_H = 44
         total_w = self.WIDTH
         BAR_BG = (35, 30, 30)
         ACCENT_LINE = (60, 55, 55)
@@ -291,6 +290,40 @@ class DrawingCanvas:
             cv2.ellipse(self.image, (ix1 + r, iy2 - r), (r, r), 0, 90, 180, color_val, thickness, cv2.LINE_AA)
             cv2.ellipse(self.image, (ix2 - r, iy2 - r), (r, r), 0, 0, 90, color_val, thickness, cv2.LINE_AA)
 
+    def draw_bezier(self, x1, y1, cpx, cpy, x2, y2, color=None, width=2):
+        """绘制二次贝塞尔曲线（从起点经控制点到终点）。"""
+        self._save_state()
+        color_val = color or self.pen_color
+        pts = []
+        for t_i in range(51):
+            t = t_i / 50.0
+            # 二次贝塞尔: B(t) = (1-t)²P0 + 2(1-t)tP1 + t²P2
+            bx = (1 - t) ** 2 * x1 + 2 * (1 - t) * t * cpx + t ** 2 * x2
+            by = (1 - t) ** 2 * y1 + 2 * (1 - t) * t * cpy + t ** 2 * y2
+            pts.append([int(bx), int(by)])
+        pts_arr = np.array(pts, dtype=np.int32).reshape(-1, 1, 2)
+        cv2.polylines(self.image, [pts_arr], False, color_val, int(width), cv2.LINE_AA)
+
+    def draw_gradient_rect(self, x1, y1, x2, y2, color1, color2, direction='horizontal'):
+        """绘制渐变矩形（从 color1 到 color2）。"""
+        self._save_state()
+        ix1, iy1 = max(0, int(x1)), max(0, int(y1))
+        ix2, iy2 = min(self.WIDTH, int(x2)), min(self.HEIGHT, int(y2))
+        w, h = ix2 - ix1, iy2 - iy1
+        if w <= 0 or h <= 0:
+            return
+        # BGR 通道
+        gradient = np.zeros((h, w, 3), dtype=np.uint8)
+        for ch in range(3):
+            c1, c2 = float(color1[ch]), float(color2[ch])
+            if direction == 'horizontal':
+                grad_line = np.linspace(c1, c2, w, dtype=np.float32)
+                gradient[:, :, ch] = np.tile(grad_line, (h, 1)).astype(np.uint8)
+            else:
+                grad_col = np.linspace(c1, c2, h, dtype=np.float32)
+                gradient[:, :, ch] = np.tile(grad_col.reshape(-1, 1), (1, w)).astype(np.uint8)
+        self.image[iy1:iy2, ix1:ix2] = gradient
+
     def set_background(self, color):
         self._save_state()
         self.image[:] = color
@@ -326,7 +359,7 @@ class DrawingCanvas:
                     cmd_count: int = 0, session_duration: float = 0.0,
                     dt: float = 0.0) -> np.ndarray:
         self._cache_static_ui()
-        BAR_H = 32
+        BAR_H = 44
         total_h = self.HEIGHT + BAR_H * 2
         total_w = self.WIDTH
         BAR_TEXT_DIM = (150, 140, 135)
@@ -344,43 +377,40 @@ class DrawingCanvas:
             canvas_roi[mask] = blended[mask]
 
         # --- Top bar ---
-        ty = 9
-        put_chinese_text(v, "语音绘图", (12, ty), 16, (240, 235, 235))
-        sp_x = 120
+        ty = 11
+        put_chinese_text(v, "语音绘图", (16, ty), 20, (240, 235, 235))
+        sp_x = 140
         last_speech = getattr(self, '_last_speech_text', '')
         if last_speech:
             speech_str = f"🎤 {last_speech}"
             max_w = total_w - sp_x - 400
             w = 0
             for i, ch in enumerate(speech_str):
-                w += 18 if ord(ch) > 127 else 9
+                w += 20 if ord(ch) > 127 else 10
                 if w > max_w:
                     speech_str = speech_str[:i] + "…"
                     break
-            put_chinese_text(v, speech_str, (sp_x, ty), 14, (120, 200, 255))
+            put_chinese_text(v, speech_str, (sp_x, ty), 16, (120, 200, 255))
 
         put_chinese_text(v, f"({int(self.cursor_x)},{int(self.cursor_y)})",
-                        (total_w - 330, ty), 13, BAR_TEXT_DIM)
-        put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 250, ty), 13, BAR_TEXT_DIM)
+                        (total_w - 360, ty), 15, BAR_TEXT_DIM)
+        put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 260, ty), 15, BAR_TEXT_DIM)
 
         # --- Bottom bar ---
         by = total_h - BAR_H
-        bty = by + 9
+        bty = by + 12
 
-        cv2.rectangle(v, (0, by), (3, total_h), (50, 200, 80) if is_listening else BAR_TEXT_DIM, -1)
-        dot_x, dot_cy = 18, by + BAR_H // 2
+        cv2.rectangle(v, (0, by), (4, total_h), (50, 200, 80) if is_listening else BAR_TEXT_DIM, -1)
+        dot_x, dot_cy = 22, by + BAR_H // 2
         if is_listening:
-            cv2.circle(v, (dot_x, dot_cy), 6, (40, 180, 80), -1, cv2.LINE_AA)
-            cv2.circle(v, (dot_x, dot_cy), 6, (80, 220, 110), 2, cv2.LINE_AA)
-            put_chinese_text(v, "聆听中", (dot_x + 16, bty), 14, (100, 220, 130))
-        else:
-            cv2.circle(v, (dot_x, dot_cy), 4, BAR_TEXT_DIM, -1, cv2.LINE_AA)
-            put_chinese_text(v, "待命", (dot_x + 14, bty), 14, BAR_TEXT_DIM)
+            cv2.circle(v, (dot_x, dot_cy), 7, (40, 180, 80), -1, cv2.LINE_AA)
+            cv2.circle(v, (dot_x, dot_cy), 7, (80, 220, 110), 2, cv2.LINE_AA)
+            put_chinese_text(v, "聆听中", (dot_x + 20, bty), 16, (100, 220, 130))
 
-        fb_x, fb_max = 120, total_w - 330
+        fb_x, fb_max = 140, total_w - 360
         if feedback_text:
             fb = feedback_text[:60]
-            fb_w = 8 + sum(18 if ord(ch) > 127 else 9 for ch in fb)
+            fb_w = 8 + sum(20 if ord(ch) > 127 else 10 for ch in fb)
             if fb_w > fb_max - fb_x:
                 fb_w = fb_max - fb_x
             fb_col = (230, 200, 100)
@@ -392,15 +422,15 @@ class DrawingCanvas:
                 fb_col = (80, 210, 110)
             elif feedback_text.startswith('💡'):
                 fb_col = (180, 220, 255)
-            put_chinese_text(v, fb, (fb_x, bty), 14, fb_col)
+            put_chinese_text(v, fb, (fb_x, bty), 16, fb_col)
 
-        stats_x = total_w - 310
-        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, bty), 13, BAR_TEXT_DIM)
+        stats_x = total_w - 340
+        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, bty), 15, BAR_TEXT_DIM)
         dur = int(session_duration)
         mm, ss = divmod(dur, 60)
         hh, mm = divmod(mm, 60)
         dur_str = f"{hh}:{mm:02d}:{ss:02d}" if hh > 0 else f"{mm:02d}:{ss:02d}"
-        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, bty), 13, BAR_TEXT_DIM)
+        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 90, bty), 15, BAR_TEXT_DIM)
 
         cx, cy_ = int(self.cursor_x), int(self.cursor_y)
         canvas_cy = cy_ + BAR_H
@@ -454,13 +484,11 @@ _NOISE_PAT = re.compile(
 
 # 绘图领域词汇提示（Whisper initial_prompt，引导模型偏向正确识别）
 _DRAWING_PROMPT = (
-    "画圆 画方形 画三角形 画五角星 画椭圆 画六边形 画菱形 画线 画圆环 "
-    "画一个红色的圆 画一个蓝色的方 画一个绿色的三角 画一个黄色的星 "
-    "在左上角 在正中间 在右下角 在上面 在下面 在左边 在右边 "
-    "光标左移 光标右移 光标上移 光标下移 光标移到 撤销 重做 清空 保存 "
-    "画房子 画树 画车 画太阳 画花 画笑脸 画流程图 "
-    "填充 空心 粗一点 细一点 红色 蓝色 绿色 黄色 紫色 黑色 白色 "
-    "下雨 开花 长成大树 萤火虫 停雨 停止动画 画一朵花 画一棵树 画一座山"
+    "画圆 画方形 画三角形 画五角星 画椭圆 画线 画矩形 "
+    "红圆 蓝方 绿三角 黄星 紫圆 画红圆 画蓝方 "
+    "左上角 右上角 左下角 右下角 正中间 上面 下面 左边 右边 "
+    "撤销 重做 清空 保存 画房子 画树 画太阳 画花 "
+    "填充 空心 粗一点 细一点 红色 蓝色 绿色 黄色"
 )
 
 
@@ -532,12 +560,16 @@ class SpeechRecognizer:
         """初始化 faster-whisper 模型（本地离线，首次运行会自动下载模型）。"""
         try:
             from faster_whisper import WhisperModel
-            # small 模型：~460MB，中文精度高，CPU 上约 2-5 秒
+            # 清除 SOCKS 代理环境变量，避免 httpx 因 socksio 缺失而崩溃
+            for _key in ('ALL_PROXY', 'all_proxy'):
+                os.environ.pop(_key, None)
+            # base 模型：~142MB，中文可用，CPU 上约 0.5-1 秒
+            # 对于有限命令集（绘图指令），base 精度足够 + initial_prompt 补偿
             self._whisper_model = WhisperModel(
-                "small", device="auto", compute_type="int8"
+                "base", device="auto", compute_type="int8"
             )
             self._whisper_available = True
-            print("[语音] Whisper 引擎已加载 (small, 离线模式)")
+            print("[语音] Whisper 引擎已加载 (base, 离线模式)")
         except Exception as e:
             print(f"[语音] Whisper 不可用: {e}")
             self._whisper_available = False
@@ -584,10 +616,15 @@ class SpeechRecognizer:
         except Exception:
             pass
 
+    _DRAWING_CHARS = set('画圆方三角星线椭圆矩形正方菱环填充空心红蓝绿黄紫橙粉棕灰黑白粗细颜色撤销重做清空保存房子树车太阳花山云')
+
     @staticmethod
     def _is_garbage(text: str) -> bool:
         if len(text) < 2:
             return True
+        # 包含绘图关键词的短文本不是噪音
+        if SpeechRecognizer._DRAWING_CHARS & set(text):
+            return False
         if len(text) <= 2 and _NOISE_PAT.match(text):
             return True
         if len(text) <= 3 and len(set(text)) == 1:
@@ -636,7 +673,23 @@ class SpeechRecognizer:
             '再中间': '在中间', '再左边': '在左边', '再右边': '在右边',
             '画一角形': '画三角形', '画三角行': '画三角形',
             '画一个 画': '画一个圆', '画一 个圆': '画一个圆',
-            '画一个圆': '画一个圆',  # 保持不变
+            '画一个圆': '画一个圆',
+            '话一个': '画一个', '化一个': '画一个',
+            '话红': '画红', '化红': '画红', '话蓝': '画蓝',
+            '五角心': '五角星', '五角新': '五角星',
+            '六变形': '六边形', '六边行': '六边形',
+            '画椭元': '画椭圆', '画托圆': '画椭圆',
+            '红缘': '红圆', '红元': '红圆', '蓝房': '蓝方',
+            '请空': '清空', '清控': '清空',
+            '宝存': '保存', '保村': '保存',
+            '吃消': '撤销', '撤消': '撤销',
+            '从做': '重做', '虫做': '重做',
+            '大阳': '太阳', '太羊': '太阳',
+            '骑车': '汽车', '七车': '汽车',
+            '画云': '画圆', '花园': '画圆', '画原': '画圆',
+            '画一个红': '画红', '画一个蓝': '画蓝',
+            '红云': '红圆', '蓝圆': '蓝圆',
+            '画正': '画', '画正方': '画正方形',
         }
         for wrong, right in WHISPER_FIXES.items():
             text = text.replace(wrong, right)
@@ -646,21 +699,24 @@ class SpeechRecognizer:
     # ------------------------------------------------------------------
     # Whisper 转写
     # ------------------------------------------------------------------
-    def _transcribe_whisper(self, audio_data: bytes, sample_rate: int) -> List[dict]:
-        """用 Whisper 转写音频，返回 [{text, avg_logprob}, ...]。"""
+    def _transcribe_whisper(self, audio_data: bytes, sample_rate: int,
+                            beam_size: int = 1) -> List[dict]:
+        """用 Whisper 转写音频，返回 [{text, avg_logprob}, ...]。
+
+        直接传 numpy 数组给 Whisper，跳过 WAV 文件写入，节省磁盘 I/O。
+
+        Args:
+            audio_data: 16-bit PCM audio bytes
+            sample_rate: 采样率（Whisper 会自动重采样到 16kHz）
+            beam_size: beam search 宽度（默认 1，贪心解码最快）
+        """
         if not self._whisper_available or self._whisper_model is None:
             return []
-        tmp_path = "/tmp/whisper_audio.wav"
         try:
-            import wave
             import locale
 
-            # 写入固定 ASCII 路径的临时文件
-            with wave.open(tmp_path, 'wb') as wf:
-                wf.setnchannels(1)
-                wf.setsampwidth(2)  # 16-bit
-                wf.setframerate(sample_rate)
-                wf.writeframes(audio_data)
+            # 16-bit PCM bytes → float32 numpy 数组（Whisper 直接接受）
+            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
             # 临时切换 locale 为 C，修复 PyAV 的 os.strerror() ASCII 解码 bug
             old_locale = locale.getlocale()
@@ -670,25 +726,22 @@ class SpeechRecognizer:
                 pass
 
             try:
-                # Whisper 转写（small 模型，平衡精度和速度）
                 segments, info = self._whisper_model.transcribe(
-                    tmp_path,
+                    audio_np,
                     language="zh",
                     initial_prompt=_DRAWING_PROMPT,
-                    beam_size=5,           # 平衡精度与延迟
-                    best_of=3,             # 减少候选数，降低延迟
-                    condition_on_previous_text=False,  # 防止幻觉级联
-                    repetition_penalty=1.3,  # 抑制重复短语
-                    no_repeat_ngram_size=3,  # 禁止 3-gram 重复
+                    beam_size=beam_size,
+                    best_of=1,
+                    condition_on_previous_text=False,
+                    no_repeat_ngram_size=3,
                     vad_filter=True,
-                    word_timestamps=True,
+                    word_timestamps=False,
                     vad_parameters=dict(
                         min_silence_duration_ms=200,
-                        speech_pad_ms=100,
+                        speech_pad_ms=80,
                     ),
                 )
             finally:
-                # 恢复原 locale
                 try:
                     locale.setlocale(locale.LC_ALL, old_locale)
                 except locale.Error:
@@ -698,20 +751,12 @@ class SpeechRecognizer:
             for seg in segments:
                 text = seg.text.strip()
                 if text:
-                    # 后处理：去重重复短语（Whisper 幻觉修复）
                     text = self._dedup_whisper_text(text)
                     if text:
-                        # 字级置信度（word_timestamps=True 时可用）
-                        word_probs = [w.probability for w in (seg.words or [])]
-                        min_word_prob = min(word_probs) if word_probs else 0.0
-                        avg_word_prob = (sum(word_probs) / len(word_probs)
-                                         if word_probs else 0.0)
                         results.append({
                             "text": text,
                             "avg_logprob": seg.avg_logprob,
                             "no_speech_prob": seg.no_speech_prob,
-                            "min_word_prob": min_word_prob,
-                            "avg_word_prob": avg_word_prob,
                         })
 
             return results
@@ -721,11 +766,6 @@ class SpeechRecognizer:
                 print(f"[DEBUG Whisper] 错误: {e}")
                 traceback.print_exc()
             return []
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
 
     # ------------------------------------------------------------------
     # Google 转写
@@ -805,17 +845,15 @@ class SpeechRecognizer:
                     logprob = r["avg_logprob"]
                     text = r["text"].strip()
                     no_speech = r.get("no_speech_prob", 0)
-                    min_word = r.get("min_word_prob", 0)
-                    avg_word = r.get("avg_word_prob", 0)
 
-                    # 三级置信度过滤
-                    if logprob < -1.5:
+                    # 置信度过滤（放宽阈值：短指令常见低分，后续有 fix_speech_text 纠错）
+                    if logprob < -2.5:
                         if self.debug:
                             print(f"  [低置信度] \"{text}\" (logprob={logprob:.2f})")
                         continue
 
                     # VAD 认为没有语音 + 置信度低 → 跳过
-                    if no_speech > 0.8 and logprob < -0.8:
+                    if no_speech > 0.9 and logprob < -1.0:
                         if self.debug:
                             print(f"  [可能无语音] \"{text}\"")
                         continue
@@ -935,7 +973,8 @@ class VoiceDrawingApp:
 
         if self.gui:
             cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(self.WINDOW_NAME, 800, 664)
+            # Match preview size: WIDTH × (HEIGHT + 2×BAR_H)
+            cv2.resizeWindow(self.WINDOW_NAME, self.canvas.WIDTH, self.canvas.HEIGHT + 88)
             print("[GUI] 绘图窗口已创建")
             print("\n" + "="*60)
             print("  🎤 语音绘图工具已启动!")
@@ -1002,13 +1041,13 @@ class VoiceDrawingApp:
         h, w = img.shape[:2]
 
         overlay = img.copy()
-        cv2.rectangle(overlay, (60, 80), (w - 60, h - 80), (20, 18, 18), -1)
+        cv2.rectangle(overlay, (80, 100), (w - 80, h - 100), (20, 18, 18), -1)
         cv2.addWeighted(overlay, 0.8, img, 0.2, 0, img)
 
-        y = 120
-        put_chinese_text(img, "🎤 语音绘图快速指南", (120, y), 26, (255, 255, 255))
+        y = 150
+        put_chinese_text(img, "🎤 语音绘图快速指南", (160, y), 32, (255, 255, 255))
 
-        y += 55
+        y += 70
         guides = [
             "直接说出指令即可绘图",
             "",
@@ -1025,54 +1064,54 @@ class VoiceDrawingApp:
 
         for line in guides:
             if line == "":
-                y += 22
+                y += 28
                 continue
-            put_chinese_text(img, line, (140, y), 18, (210, 210, 215))
-            y += 32
+            put_chinese_text(img, line, (180, y), 22, (210, 210, 215))
+            y += 40
 
         remaining = int(self._welcome_expire - time.time())
         if remaining > 0:
             put_chinese_text(img, f"此指南将在 {remaining} 秒后消失...",
-                           (w//2 - 150, h - 120), 14, (150, 150, 150))
+                           (w//2 - 170, h - 140), 16, (150, 150, 150))
 
         put_chinese_text(img, "按任意键或说出指令关闭此指南",
-                        (w//2 - 180, h - 90), 14, (150, 150, 150))
+                        (w//2 - 200, h - 110), 16, (150, 150, 150))
 
     def _draw_help_overlay(self, img):
         """Draw help overlay on the canvas."""
         h, w = img.shape[:2]
 
         overlay = img.copy()
-        cv2.rectangle(overlay, (40, 40), (w - 40, h - 40), (20, 18, 18), -1)
+        cv2.rectangle(overlay, (50, 50), (w - 50, h - 50), (20, 18, 18), -1)
         cv2.addWeighted(overlay, 0.8, img, 0.2, 0, img)
 
-        y = 70
+        y = 85
         for line in HELP_TEXT.splitlines():
             if line == "":
-                y += 14
+                y += 18
                 continue
             if line.startswith("【") or line.startswith("🎤"):
-                put_chinese_text(img, line, (70, y), 20, (255, 255, 255))
+                put_chinese_text(img, line, (85, y), 24, (255, 255, 255))
             elif line.startswith("💡"):
-                put_chinese_text(img, line, (70, y), 16, (180, 220, 255))
+                put_chinese_text(img, line, (85, y), 20, (180, 220, 255))
             else:
-                put_chinese_text(img, line, (70, y), 16, (200, 200, 205))
-            y += 26
-            if y > h - 60:
+                put_chinese_text(img, line, (85, y), 20, (200, 200, 205))
+            y += 32
+            if y > h - 70:
                 break
 
         put_chinese_text(img, "按任意键或说出指令关闭帮助",
-                        (w // 2 - 170, h - 50), 14, (160, 160, 165))
+                        (w // 2 - 190, h - 60), 16, (160, 160, 165))
 
     def _draw_clear_confirm_overlay(self, img):
         """Draw clear confirmation overlay on the canvas."""
         h, w = img.shape[:2]
         overlay = img.copy()
-        cv2.rectangle(overlay, (w // 2 - 220, h // 2 - 50), (w // 2 + 220, h // 2 + 50), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (w // 2 - 280, h // 2 - 65), (w // 2 + 280, h // 2 + 65), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)
         remaining = int(5.0 - (time.time() - self._pending_confirm_time))
         put_chinese_text(img, f"按回车清空画布 ({remaining}秒)",
-                        (w // 2 - 200, h // 2 + 5), 22, (100, 180, 255))
+                        (w // 2 - 240, h // 2 + 5), 26, (100, 180, 255))
 
     def _speech_loop(self):
         while self.running:
@@ -1169,6 +1208,25 @@ class VoiceDrawingApp:
                                             self.canvas.cursor_y)
             if cmd is not None:
                 return cleaned
+        # 如果所有候选都解析失败，尝试对第一个文本执行 fix_speech_text 后再解析
+        if texts:
+            from .commands import fix_speech_text
+            t = texts[0].strip().rstrip('。，！？；：,.!?;:')
+            fixed = fix_speech_text(t)
+            if fixed != t:
+                cmd = self.parser.parse_command(fixed, self.canvas.cursor_x, self.canvas.cursor_y)
+                if cmd is not None:
+                    if self.debug:
+                        print(f"[DEBUG] fix_speech_text 后解析成功: \"{fixed}\"")
+                    return fixed
+            # 最后尝试：直接翻译后模糊匹配
+            from .commands import zh_to_en
+            en = zh_to_en(fixed)
+            cmd = self.parser.parse_command(en, self.canvas.cursor_x, self.canvas.cursor_y)
+            if cmd is not None:
+                if self.debug:
+                    print(f"[DEBUG] 英文模糊匹配成功: \"{en}\"")
+                return t  # 返回原始文本，execute_command 会重新解析
         return None
 
     _REPEAT_PAT = re.compile(r'再[画来][一一个]个?|再来[一一个]?遍?|重复[一一个]?[下遍次]?|同样的|再来')
@@ -1329,11 +1387,11 @@ class VoiceDrawingApp:
         elif isinstance(cmd, MoveCursorCommand):
             self.canvas.cursor_x += cmd.dx
             self.canvas.cursor_y += cmd.dy
-            self.canvas.cursor_x = max(0, min(799, self.canvas.cursor_x))
-            self.canvas.cursor_y = max(0, min(599, self.canvas.cursor_y))
+            self.canvas.cursor_x = max(0, min(self.canvas.WIDTH - 1, self.canvas.cursor_x))
+            self.canvas.cursor_y = max(0, min(self.canvas.HEIGHT - 1, self.canvas.cursor_y))
         elif isinstance(cmd, SetCursorCommand):
-            self.canvas.cursor_x = max(0, min(799, cmd.x))
-            self.canvas.cursor_y = max(0, min(599, cmd.y))
+            self.canvas.cursor_x = max(0, min(self.canvas.WIDTH - 1, cmd.x))
+            self.canvas.cursor_y = max(0, min(self.canvas.HEIGHT - 1, cmd.y))
         elif not isinstance(cmd, (MoveLastCommand, ScaleLastCommand, ConfirmCommand,
                                   ClearCanvasCommand, UndoCommand, RedoCommand,
                                   SetColorCommand, SetWidthCommand, SetBackgroundCommand,

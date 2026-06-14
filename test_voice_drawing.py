@@ -14,7 +14,7 @@ from voice_drawing_tool.core import DrawingCanvas, VoiceDrawingApp
 
 def test_initial_state():
     c = DrawingCanvas()
-    assert c.image.shape == (600, 800, 3), f"wrong shape: {c.image.shape}"
+    assert c.image.shape == (900, 1200, 3), f"wrong shape: {c.image.shape}"
     assert tuple(c.image[0, 0]) == (245, 248, 250), "bg should be off-white"
     assert c.pen_color == (0, 0, 255)
     assert c.pen_width == 2

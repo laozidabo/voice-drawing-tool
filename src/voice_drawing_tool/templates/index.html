@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>语音绘图工具</title>
-<link rel="stylesheet" href="/static/style.css?v=2">
+<link rel="stylesheet" href="/static/style.css?v=4">
 </head>
 <body>
 
@@ -37,79 +37,176 @@
           <span>画红圆</span><span>画房子</span><span>画太阳在上面</span>
           <span>撤销</span><span>清空</span><span>保存</span>
         </div>
-        <p id="debug-log" style="font-size:11px;color:#666;margin-top:12px;"></p>
+        <p id="debug-log" style="font-size:13px;color:#666;margin-top:16px;"></p>
       </div>
     </div>
   </div>
 </div>
 
 <script>
+// ── 状态 ──
+var audioCtx = null;
+var micStream = null;
+var processor = null;
+var isCapturing = false;
+var isSpeaking = false;
+var isSending = false;   // Whisper 转写进行中，暂停采集
+var silenceFrames = 0;
+var speechBuffer = [];     // Float32Array 累积
+var SAMPLE_RATE = 16000;
+var SILENCE_THRESHOLD = 0.012;  // 静音阈值（降低以提高灵敏度）
+var SILENCE_FRAMES = 8;         // 8×93ms ≈ 0.75秒静音后发送
+var MIN_SPEECH_FRAMES = 4;      // 最少 ~100ms 语音才发送
+
 function log(msg) {
   var el = document.getElementById('debug-log');
   if (el) el.textContent += msg + ' | ';
   console.log('[Voice]', msg);
 }
 
-var recognition = null;
-var isListening = false;
-
+// ── 启动麦克风 ──
 function startApp() {
-  log('按钮已点击');
+  log('启动中…');
   document.getElementById('welcome-overlay').classList.add('hidden');
 
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    log('浏览器不支持 SpeechRecognition');
-    setVoiceLabel('浏览器不支持语音', true);
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setVoiceLabel('浏览器不支持麦克风 API', true);
     return;
   }
-  log('SpeechRecognition 可用');
 
-  recognition = new SR();
-  recognition.lang = 'zh-CN';
-  recognition.continuous = true;
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 3;
-
-  recognition.onstart = function() {
-    isListening = true;
-    log('语音识别已启动');
-    setVoiceLabel('正在聆听…', false);
-  };
-
-  recognition.onend = function() {
-    isListening = false;
-    log('语音识别结束，重启中…');
-    if (recognition._active) {
-      try { recognition.start(); } catch(e) { log('重启失败: ' + e.message); }
-    }
-  };
-
-  recognition.onresult = function(event) {
-    var last = event.results[event.results.length - 1];
-    if (!last.isFinal) return;
-    var text = last[0].transcript.trim();
-    log('识别: ' + text);
-    setVoiceLabel('🎤 ' + text, false);
-    sendCommand(text);
-  };
-
-  recognition.onerror = function(event) {
-    log('语音错误: ' + event.error);
-    if (event.error === 'not-allowed') {
-      setVoiceLabel('请允许麦克风权限', true);
-    }
-  };
-
-  recognition._active = true;
-  try {
-    recognition.start();
-    log('正在启动…');
-  } catch(e) {
-    log('启动失败: ' + e.message);
-  }
+  navigator.mediaDevices.getUserMedia({audio: {sampleRate: SAMPLE_RATE, channelCount: 1}})
+    .then(function(stream) {
+      micStream = stream;
+      // 获取实际采样率
+      var tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+      var tempSource = tempCtx.createMediaStreamSource(stream);
+      SAMPLE_RATE = tempCtx.sampleRate;
+      tempCtx.close();
+      log('麦克风已打开，采样率: ' + SAMPLE_RATE);
+      startCapture();
+    })
+    .catch(function(err) {
+      log('麦克风错误: ' + err.message);
+      setVoiceLabel('麦克风权限被拒绝', true);
+    });
 }
 
+// ── 开始录音 + VAD ──
+function startCapture() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)({sampleRate: SAMPLE_RATE});
+  var source = audioCtx.createMediaStreamSource(micStream);
+
+  // 使用 ScriptProcessorNode 捕获 PCM（4096 帧 ≈ 93ms @44100）
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  source.connect(processor);
+  processor.connect(audioCtx.destination);
+
+  isCapturing = true;
+  setVoiceLabel('正在聆听…', false);
+  setStatusBadge('● 聆听中', '#4caf50');
+
+  processor.onaudioprocess = function(e) {
+    if (!isCapturing || isSending) return;
+    var data = e.inputBuffer.getChannelData(0);
+
+    // 计算 RMS 音量
+    var sum = 0;
+    for (var i = 0; i < data.length; i++) sum += data[i] * data[i];
+    var rms = Math.sqrt(sum / data.length);
+
+    if (rms > SILENCE_THRESHOLD) {
+      // 检测到语音
+      if (!isSpeaking) {
+        isSpeaking = true;
+        speechBuffer = [];
+        log('语音开始');
+        setVoiceLabel('🎤 检测到语音…', false);
+      }
+      silenceFrames = 0;
+      speechBuffer.push(new Float32Array(data));
+    } else if (isSpeaking) {
+      silenceFrames++;
+      speechBuffer.push(new Float32Array(data)); // 保留静音帧（前后缓冲）
+
+      if (silenceFrames >= SILENCE_FRAMES) {
+        // 静音足够长，认为说完
+        isSpeaking = false;
+        var totalFrames = speechBuffer.length;
+        if (totalFrames >= MIN_SPEECH_FRAMES) {
+          log('语音结束，发送 ' + totalFrames + ' 帧');
+          setVoiceLabel('识别中…', false);
+          sendAudioForTranscription();
+        } else {
+          log('语音太短，忽略');
+          speechBuffer = [];
+        }
+      }
+    }
+  };
+}
+
+// ── 发送音频到后端 Whisper ──
+function sendAudioForTranscription() {
+  isSending = true;  // 暂停采集，防止并发
+
+  // 合并所有帧
+  var totalLen = 0;
+  for (var i = 0; i < speechBuffer.length; i++) totalLen += speechBuffer[i].length;
+  var pcm = new Float32Array(totalLen);
+  var offset = 0;
+  for (var i = 0; i < speechBuffer.length; i++) {
+    pcm.set(speechBuffer[i], offset);
+    offset += speechBuffer[i].length;
+  }
+  speechBuffer = [];
+
+  // Float32 → Int16 PCM
+  var int16 = new Int16Array(pcm.length);
+  for (var i = 0; i < pcm.length; i++) {
+    var s = Math.max(-1, Math.min(1, pcm[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+
+  fetch('/api/audio?rate=' + SAMPLE_RATE, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/octet-stream'},
+    body: int16.buffer
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.texts && data.texts.length > 0) {
+      var text = data.texts[0];
+      log('识别结果: ' + text);
+      setVoiceLabel('🎤 ' + text, false);
+
+      if (data.result) {
+        showToast(data.result.feedback, data.result.ok);
+        document.getElementById('canvas-img').src = '/api/preview?t=' + Date.now();
+        if (data.result.cmd_count !== undefined) {
+          document.getElementById('cmd-count').textContent = data.result.cmd_count;
+        }
+      } else {
+        showToast(data.feedback || '未识别', false);
+      }
+      // 保持识别结果显示 1.5 秒后恢复聆听状态
+      setTimeout(function() {
+        setVoiceLabel('正在聆听…', false);
+        isSending = false;
+      }, 1500);
+    } else {
+      setVoiceLabel('正在聆听…', false);
+      isSending = false;
+      if (data.feedback) showToast(data.feedback, false);
+    }
+  })
+  .catch(function(err) {
+    log('请求失败: ' + err.message);
+    setVoiceLabel('正在聆听…', false);
+    isSending = false;
+  });
+}
+
+// ── UI 工具 ──
 function setVoiceLabel(text, isError) {
   var indicator = document.getElementById('voice-indicator');
   var label = document.getElementById('voice-label');
@@ -118,19 +215,10 @@ function setVoiceLabel(text, isError) {
   else indicator.classList.remove('error');
 }
 
-function sendCommand(text) {
-  fetch('/api/command', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({text: text})
-  })
-  .then(function(r) { return r.json(); })
-  .then(function(data) {
-    showToast(data.feedback, data.ok);
-    document.getElementById('canvas-img').src = '/api/preview?t=' + Date.now();
-    document.getElementById('cmd-count').textContent = data.cmd_count || '';
-  })
-  .catch(function() { showToast('网络错误', false); });
+function setStatusBadge(text, color) {
+  var badge = document.getElementById('status-badge');
+  badge.textContent = text;
+  badge.style.color = color || '';
 }
 
 var toastTimer;
@@ -142,7 +230,7 @@ function showToast(msg, ok) {
   toastTimer = setTimeout(function() { toast.classList.add('hidden'); }, 3500);
 }
 
-// 定期刷新画布和状态
+// 定期刷新画布和状态（JPEG 更快，每 1.5 秒）
 setInterval(function() {
   var img = document.getElementById('canvas-img');
   img.src = '/api/preview?t=' + Date.now();
@@ -152,7 +240,7 @@ setInterval(function() {
     var ss = String(s.session_duration % 60).padStart(2, '0');
     document.getElementById('duration').textContent = mm + ':' + ss;
   }).catch(function(){});
-}, 2000);
+}, 1500);
 </script>
 </body>
 </html>

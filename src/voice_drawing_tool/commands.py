@@ -141,7 +141,7 @@ _ZH_EN_MAP = {
     '一半': 'half',
     '大一点': 'bigger', '大点': 'bigger', '放大': 'bigger',
     '小一点': 'smaller', '小点': 'smaller', '缩小': 'smaller',
-    '就这样': 'confirm', '完成了': 'confirm', '完工': 'confirm', '好': 'confirm',
+    '就这样': 'confirm', '完成了': 'confirm', '完工': 'confirm',
     '确认': 'confirm', '可以': 'confirm', '不错': 'confirm',
     '光标': 'cursor', '鼠标': 'cursor', '指针': 'cursor',
     '光': 'cursor',
@@ -185,6 +185,12 @@ _ZH_EN_MAP = {
     '极光': 'aurora', '放极光': 'aurora', '画极光': 'aurora',
     '停极光': 'stop aurora', '极光停': 'stop aurora', '停止极光': 'stop aurora',
     '停止动画': 'stop animation', '停动画': 'stop animation', '停止所有动画': 'stop animation',
+    # 新增：弧线、曲线、渐变
+    '弧线': 'arc', '弧': 'arc', '画弧': 'draw arc', '画弧线': 'draw arc',
+    '曲线': 'bezier', '贝塞尔': 'bezier', '弯线': 'bezier', '画曲线': 'draw bezier',
+    '渐变': 'gradient', '渐变色': 'gradient', '渐变矩形': 'gradient rect',
+    '画渐变': 'draw gradient', '从': 'from', '到': 'to', '至': 'to',
+    '经过': 'via', '通过': 'via',
 }
 
 _SPEECH_FIX_MAP = {
@@ -210,9 +216,9 @@ _SPEECH_FIX_MAP = {
     '灵形': '菱形', '领形': '菱形', '令形': '菱形',
     '左边形': '左边',
     '空心圆': '圆',
-    '六边形': '六边形', '六边行': '六边形', '溜边形': '六边形',
-    '多边形': '多边形', '多边行': '多边形', '躲边形': '多边形',
-    '圆角矩形': '圆角矩形', '圆角据形': '圆角矩形',
+    '六边行': '六边形', '溜边形': '六边形',
+    '多边行': '多边形', '躲边形': '多边形',
+    '圆角据形': '圆角矩形',
 
     # === 颜色纠错 ===
     '男色': '蓝色', '兰色': '蓝色', '蓝蓝': '蓝色', '兰': '蓝',
@@ -223,56 +229,92 @@ _SPEECH_FIX_MAP = {
     '长成': '长成',
     '呈': '橙', '成': '橙', '城': '橙', '诚': '橙',
     '宗色': '棕色', '综色': '棕色', '总色': '棕色',
-    '辉色': '灰色', '灰色': '灰色', '回色': '灰色', '会色': '灰色',
+    '辉色': '灰色', '回色': '灰色', '会色': '灰色',
     '录色': '绿色', '虑色': '绿色', '律色': '绿色',
     '子色': '紫色', '自色': '紫色', '资色': '紫色',
-    '粉色': '粉色', '奋色': '粉色', '坟色': '粉色',
-    '茶色': '茶色', '查色': '茶色',
+    '奋色': '粉色', '坟色': '粉色',
+    '查色': '茶色',
 
     # === 操作纠错 ===
     '吃消': '撤销', '撤消': '撤销', '彻消': '撤销', '车消': '撤销',
     '宝存': '保存', '保村': '保存', '报存': '保存', '保寸': '保存',
-    '清处': '清除', '清出': '清除', '清除': '清除', '轻除': '清除',
+    '清处': '清除', '清出': '清除', '轻除': '清除',
     '十心': '实心', '食心': '实心', '石心': '实心', '时心': '实心',
     '空芯': '空心', '空新': '空心', '空欣': '空心', '空信': '空心',
-    '重做': '重做', '从做': '重做', '虫做': '重做',
+    '从做': '重做', '虫做': '重做',
 
     # === 位置/方向纠错 ===
-    '左上': '左上', '做上': '左上', '昨上': '左上',
-    '右下': '右下', '有下': '右下', '又下': '右下',
-    '正中间': '正中间', '正中见': '正中间', '中间': '正中间',
+    '做上': '左上', '昨上': '左上',
+    '有下': '右下', '又下': '右下',
+    '正中见': '正中间', '中间': '正中间',
 
     # === 样式纠错 ===
-    '填充': '填充', '天充': '填充', '田充': '填充',
-    '粗一点': '粗一点', '粗一店': '粗一点', '粗一电': '粗一点',
-    '细一点': '细一点', '细一店': '细一点', '细一电': '细一点',
+    '粗一店': '粗一点', '粗一电': '粗一点', '粗一的': '粗一点',
+    '细一店': '细一点', '细一电': '细一点', '细一的': '细一点',
 
     # === 场景纠错 ===
-    '房子': '房子', '放子': '房子', '方子': '房子',
-    '太阳': '太阳', '大阳': '太阳', '太羊': '太阳',
-    '汽车': '汽车', '骑车': '汽车', '七车': '汽车',
+    '放子': '房子', '方子': '房子',
+    '大阳': '太阳', '太羊': '太阳',
+    '骑车': '汽车', '七车': '汽车',
 
     # === 常见语音识别噪音 ===
     '的的': '的', '了了': '了', '是是': '是',
     '然后然后': '然后', '就是就是': '就是',
-    # === Whisper 常见误识别 ===
-    '话一个': '画一个', '化一个': '画一个', '画一格': '画一个',
+
+    # === Whisper 组合纠错 ===
+    '话一个': '画一个', '化一个': '画一个', '画一格': '画一个', '花一个': '画一个',
     '花圆': '画圆', '花方': '画方', '花三角': '画三角',
+    '话红圆': '画红圆', '化红圆': '画红圆', '花红圆': '画红圆', '话蓝圆': '画蓝圆',
     '红远': '红圆', '红元': '红圆', '红缘': '红圆',
     '蓝房': '蓝方', '兰方': '蓝方', '兰房': '蓝方',
     '绿山角': '绿三角', '绿山角形': '绿三角形',
-    '黄星': '黄星', '黄心': '黄星',
-    '画房子': '画房子', '画房子': '画房子', '画芳子': '画房子',
-    '画树': '画树', '画术': '画树', '画数': '画树',
-    '画车': '画车', '画扯': '画车', '画彻': '画车',
-    '画太阳': '画太阳', '画大阳': '画太阳', '画太羊': '画太阳',
-    '画花': '画花', '画华': '画花',
-    '画山': '画山', '画三': '画山',
-    '撤销': '撤销', '吃消': '撤销', '撤消': '撤销',
-    '重做': '重做', '从做': '重做', '虫做': '重做',
-    '清空': '清空', '清控': '清空', '清空': '清空',
-    '保存': '保存', '宝存': '保存', '保村': '保存',
-    '帮助': '帮助', '帮主': '帮助', '帮住': '帮助',
+    '黄心': '黄星',
+    '画芳子': '画房子',
+    '画扯': '画车', '画彻': '画车',
+    '画大阳': '画太阳', '画太羊': '画太阳',
+    '画华': '画花',
+    '画三': '画山',
+    '清控': '清空',
+    '帮主': '帮助', '帮住': '帮助',
+    '帮我画': '画',
+    '画五角心': '画五角星', '画五星形': '画五角星',
+    '画椭圆形': '画椭圆', '画托圆': '画椭圆',
+    '六变形': '六边形',
+    '画个圆': '画圆', '画个方': '画方',
+    '画个三角': '画三角形', '画个星': '画五角星',
+    # === 新增：常见 Whisper 误识别 ===
+    '花园': '画圆', '花圆': '画圆', '欢迎': '画圆', '画云': '画圆',
+    '画房': '画方', '画放': '画方', '花房': '画方',
+    '发送': '画三角', '三星': '三角形', '山角形': '三角形',
+    '三脚形': '三角形', '三甲型': '三角形', '上角': '三角',
+    '五角形': '五角星', '无心': '五角星', '舞星': '五角星',
+    '画先': '画线', '画现': '画线', '花线': '画线',
+    '红云': '红圆', '宏愿': '红圆', '红园': '红圆',
+    '蓝园': '蓝圆', '男圆': '蓝圆',
+    '绿园': '绿圆', '绿云': '绿圆',
+    '黄园': '黄圆', '皇圆': '黄圆',
+    '晴空': '清空', '轻控': '清空',
+    '画放子': '画房子', '画方子': '画房子',
+    '花托圆': '画椭圆', '画妥圆': '画椭圆', '画拖圆': '画椭圆',
+    '花圈': '画圆', '画圈': '画圆',
+    '花线': '画线', '画县': '画线', '画限': '画线',
+    '方型': '方形', '房型': '方形', '画房型': '画方形',
+    '光彪': '光标',
+    '商移': '上移', '夏移': '下移',
+    '亭止': '停止',
+    '虾雨': '下雨',
+    '眼花': '烟花', '荧火虫': '萤火虫',
+    '停止通化': '停止动画',
+
+    # === 动画指令纠错 ===
+    '虾雪': '下雪',
+    '气宝': '气泡',
+    '几光': '极光',
+    '流行': '流星',
+    '磨法': '魔法',
+    '眼花': '烟花',
+    '亭雨': '停雨',
+    '亭雪': '停雪',
 }
 _SPEECH_FIX_PATTERNS = sorted(_SPEECH_FIX_MAP.keys(), key=len, reverse=True)
 _SPEECH_FIX_RE = re.compile('|'.join(re.escape(zh) for zh in _SPEECH_FIX_PATTERNS))
@@ -974,6 +1016,70 @@ class DrawDiamondCommand(Command):
         return f"draw {self.color_name} diamond"
 
 
+class DrawArcCommand(Command):
+    def __init__(self, params: Dict[str, str]):
+        self.params = dict(params)
+        self.cx = int(params.get('cx', 400))
+        self.cy = int(params.get('cy', 300))
+        self.radius = int(params.get('radius', 80))
+        self.start_angle = int(params.get('start_angle', 0))
+        self.end_angle = int(params.get('end_angle', 180))
+        self.color = resolve_color(params.get('color', ''))
+        self.width = int(params.get('width', 2))
+        self.color_name = params.get('color', 'black')
+
+    def execute(self, canvas) -> str:
+        canvas.draw_arc(self.cx, self.cy, self.radius,
+                        self.start_angle, self.end_angle,
+                        color=self.color, width=self.width)
+        return f"arc at ({self.cx},{self.cy}) r={self.radius} {self.start_angle}°-{self.end_angle}°"
+
+    def get_description(self) -> str:
+        return f"draw {self.color_name} arc"
+
+
+class DrawBezierCommand(Command):
+    def __init__(self, params: Dict[str, str]):
+        self.params = dict(params)
+        self.x1 = int(params.get('x1', 100))
+        self.y1 = int(params.get('y1', 500))
+        self.cpx = int(params.get('cpx', 400))
+        self.cpy = int(params.get('cpy', 100))
+        self.x2 = int(params.get('x2', 700))
+        self.y2 = int(params.get('y2', 500))
+        self.color = resolve_color(params.get('color', ''))
+        self.width = int(params.get('width', 2))
+        self.color_name = params.get('color', 'black')
+
+    def execute(self, canvas) -> str:
+        canvas.draw_bezier(self.x1, self.y1, self.cpx, self.cpy,
+                           self.x2, self.y2, color=self.color, width=self.width)
+        return f"bezier ({self.x1},{self.y1})→({self.cpx},{self.cpy})→({self.x2},{self.y2})"
+
+    def get_description(self) -> str:
+        return f"draw {self.color_name} bezier curve"
+
+
+class DrawGradientRectCommand(Command):
+    def __init__(self, params: Dict[str, str]):
+        self.params = dict(params)
+        self.x1 = int(params.get('x1', 100))
+        self.y1 = int(params.get('y1', 100))
+        self.x2 = int(params.get('x2', 500))
+        self.y2 = int(params.get('y2', 400))
+        self.color1 = resolve_color(params.get('color1', 'red'))
+        self.color2 = resolve_color(params.get('color2', 'blue'))
+        self.color1_name = params.get('color1', 'red')
+        self.color2_name = params.get('color2', 'blue')
+        self.direction = params.get('direction', 'horizontal')
+
+    def execute(self, canvas) -> str:
+        canvas.draw_gradient_rect(self.x1, self.y1, self.x2, self.y2,
+                                   self.color1, self.color2, self.direction)
+        return f"gradient {self.color1_name}→{self.color2_name} ({self.x1},{self.y1})-({self.x2},{self.y2})"
+
+    def get_description(self) -> str:
+        return f"draw gradient {self.color1_name} to {self.color2_name}"
 class SceneTemplate:
     BUILDINGS = [
         ("draw a red rectangle from 100,300 to 300,500", "building body"),
@@ -1838,6 +1944,7 @@ _KNOWN_KEYWORDS = [
     'text', 'write', 'draw', 'set', 'color', 'width', 'background',
     'cursor', 'move', 'scale', 'bigger', 'smaller', 'house', 'tree',
     'flower', 'sun', 'mountain', 'car', 'smiley', 'flowchart',
+    'arc', 'bezier', 'gradient',
 ]
 
 
@@ -1862,6 +1969,28 @@ class CommandParser:
         points = r"(?P<points>(?:\d+\s*,\s*\d+\s*){2,}(?:\d+\s*,\s*\d+))"
 
         self.patterns = [
+            # === 无坐标简写模式（优先匹配） ===
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?filled\s+{color_group}\s+circle\s*$",
+             lambda m: DrawFilledCircleCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+circle\s*$",
+             lambda m: DrawCircleCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+square\s*$",
+             lambda m: DrawSquareCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+star\s*$",
+             lambda m: DrawStarCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+ellipse\s*$",
+             lambda m: DrawEllipseCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+ring\s*$",
+             lambda m: DrawRingCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+line\s*$",
+             lambda m: DrawLineCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+triangle\s*$",
+             lambda m: DrawTriangleCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+diamond\s*$",
+             lambda m: DrawDiamondCommand(m.groupdict())),
+            (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+rectangle\s*$",
+             lambda m: DrawRectangleCommand({**m.groupdict(), 'filled': 'false'})),
+            # === 带坐标的完整模式 ===
             (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?filled\s+{color_group}\s+circle\s+(?:at\s+)?\(?{coord}\)?\s*(?:with\s+)?(?:radius\s+)?(?P<radius>{number})",
              lambda m: DrawFilledCircleCommand(m.groupdict())),
             (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?{color_group}\s+circle\s+(?:at\s+)?\(?{coord}\)?\s*(?:with\s+)?(?:radius\s+)?(?P<radius>{number})",
@@ -1906,6 +2035,15 @@ class CommandParser:
              lambda m: DrawRoundedRectCommand({**m.groupdict(), 'filled': 'true' if 'filled' in m.group(0) else 'false'})),
             (rf"(?:draw|make|create|paint)\s+(?:an?\s+)?(?:filled\s+)?{color_group}\s+diamond\s+(?:at\s+)?\(?(?P<cx>{number})\s*,\s*(?P<cy>{number})\)?\s*(?:rx\s*[=:]?\s*(?P<rx>{number})\s*(?:ry\s*[=:]?\s*(?P<ry>{number})?)?)",
              lambda m: DrawDiamondCommand({**m.groupdict(), 'filled': 'true' if 'filled' in m.group(0) else 'false'})),
+            # 弧线: draw a red arc at 300,300 radius 80 from 0 to 180
+            (rf"(?:draw|make|create)\s+(?:an?\s+)?{color_group}\s+arc\s+(?:at\s+)?\(?(?P<cx>{number})\s*,\s*(?P<cy>{number})\)?\s*(?:radius\s*[=:]?\s*(?P<radius>{number}))?\s*(?:from\s+(?P<start_angle>{number}))?\s*(?:to\s+(?P<end_angle>{number}))?",
+             lambda m: DrawArcCommand(m.groupdict())),
+            # 贝塞尔曲线: draw a red bezier from 100,500 via 400,100 to 700,500
+            (rf"(?:draw|make|create)\s+(?:an?\s+)?{color_group}\s+be(?:zier|zier curve)\s+from\s+(?P<x1>{number})\s*,\s*(?P<y1>{number})\s+via\s+(?P<cpx>{number})\s*,\s*(?P<cpy>{number})\s+to\s+(?P<x2>{number})\s*,\s*(?P<y2>{number})",
+             lambda m: DrawBezierCommand(m.groupdict())),
+            # 渐变矩形: draw a gradient from red to blue from 100,100 to 500,400
+            (rf"(?:draw|make|create)\s+(?:a\s+)?gradient\s+from\s+(?P<color1>\w+)\s+to\s+(?P<color2>\w+)\s+from\s+(?P<x1>{number})\s*,\s*(?P<y1>{number})\s+to\s+(?P<x2>{number})\s*,\s*(?P<y2>{number})",
+             lambda m: DrawGradientRectCommand(m.groupdict())),
             (r"(?:save|export)\s+(?:the\s+)?(?:drawing|canvas|file)?\s*(?:as\s+)?(?P<filename>[\w./\\-]+)?",
              lambda m: SaveCommand(m.groupdict())),
             (rf"repeat\s+variation\s+(?P<color>{COLOR_NAMES})",
@@ -1986,6 +2124,32 @@ class CommandParser:
                 nums = extract_numbers(text_l)
                 factor = nums[0] if nums else 2
                 return ScaleLastCommand({'factor': str(factor)})
+
+            # 弧线（无坐标，使用默认位置）
+            if re.search(r'\barc\b', text_l):
+                return DrawArcCommand({
+                    'color': cname, 'cx': str(cx), 'cy': str(cy),
+                    'radius': _r(80), 'start_angle': '0', 'end_angle': '180', 'width': width,
+                })
+
+            # 贝塞尔曲线（无坐标）
+            if re.search(r'\bbezier\b', text_l):
+                return DrawBezierCommand({
+                    'color': cname,
+                    'x1': str(cx - 200), 'y1': str(cy + 100),
+                    'cpx': str(cx), 'cpy': str(cy - 150),
+                    'x2': str(cx + 200), 'y2': str(cy + 100),
+                    'width': width,
+                })
+
+            # 渐变（无坐标）
+            if re.search(r'\bgradient\b', text_l):
+                c2 = 'blue' if cname == 'red' else 'red'
+                return DrawGradientRectCommand({
+                    'color1': cname, 'color2': c2,
+                    'x1': str(cx - 150), 'y1': str(cy - 100),
+                    'x2': str(cx + 150), 'y2': str(cy + 100),
+                })
 
             return None
 
@@ -2084,7 +2248,7 @@ class CommandParser:
 
         cx, cy = _find_position(text_l, self.cursor_x, self.cursor_y)
 
-        has_shape = bool(re.search(r'\b(circle|square|ring|triangle|star|rectangle|ellipse|line|hexagon|diamond|polygon|arrow|rounded)\b', text_l))
+        has_shape = bool(re.search(r'\b(circle|square|ring|triangle|star|rectangle|ellipse|line|hexagon|diamond|polygon|arrow|rounded|arc|bezier|gradient)\b', text_l))
         cname = _find_color(text_l)
         if cname is None and has_shape:
             cname = 'black'
@@ -2148,6 +2312,26 @@ class CommandParser:
                 return DrawEllipseCommand({
                     'color': cname, 'x': str(cx), 'y': str(cy),
                     'rx': '150', 'ry': '80', 'width': width,
+                })
+            if re.search(r'\barc\b', text_l):
+                return DrawArcCommand({
+                    'color': cname, 'cx': str(cx), 'cy': str(cy),
+                    'radius': _r(80), 'start_angle': '0', 'end_angle': '180', 'width': width,
+                })
+            if re.search(r'\bbezier\b', text_l):
+                return DrawBezierCommand({
+                    'color': cname,
+                    'x1': str(cx - 200), 'y1': str(cy + 100),
+                    'cpx': str(cx), 'cpy': str(cy - 150),
+                    'x2': str(cx + 200), 'y2': str(cy + 100),
+                    'width': width,
+                })
+            if re.search(r'\bgradient\b', text_l):
+                c2 = 'blue' if cname == 'red' else 'red'
+                return DrawGradientRectCommand({
+                    'color1': cname, 'color2': c2,
+                    'x1': str(cx - 150), 'y1': str(cy - 100),
+                    'x2': str(cx + 150), 'y2': str(cy + 100),
                 })
 
             is_horizontal = bool(re.search(r'\bhorizont', text_l))
@@ -2306,25 +2490,22 @@ class CommandParser:
         if not text or not any('\u4e00' <= ch <= '\u9fff' for ch in text):
             return None
         try:
-            from .pinyin_matcher import _to_pinyin, _edit_distance
+            from . import pinyin_matcher
+            _to_pinyin = pinyin_matcher._to_pinyin
+            _edit_distance = pinyin_matcher._edit_distance
         except Exception:
             return None
-        # 构建拼音索引（首次调用时缓存）
-        if not hasattr(self, '_pinyin_index'):
-            self._pinyin_index = {}
-            for zh in _ZH_EN_ALL:
-                try:
-                    py = _to_pinyin(zh)
-                    if py:
-                        self._pinyin_index[zh] = py
-                except Exception:
-                    continue
+        # 使用 build_pinyin_index() 建立的全局索引（在 CommandParser.__init__ 中调用）
+        # 通过模块属性访问，避免 from-import 的 stale reference 问题
+        pinyin_index = pinyin_matcher._COMMAND_PINYIN_INDEX
+        if not pinyin_index:
+            return None
         text_py = _to_pinyin(text)
         if not text_py:
             return None
         best_zh = None
         best_dist = 3  # 最多允许 2 处拼音差异
-        for zh_cmd, cmd_py in self._pinyin_index.items():
+        for zh_cmd, cmd_py in pinyin_index:
             if text_py == cmd_py:
                 best_zh = zh_cmd
                 best_dist = 0
@@ -2464,7 +2645,7 @@ class RepeatLastWithVariationCommand(Command):
 class StartRainCommand(Command):
     def execute(self, canvas) -> str:
         from .animation import RainAnimation
-        canvas.anim_mgr.add(RainAnimation(canvas.WIDTH))
+        canvas.anim_mgr.add(RainAnimation(canvas.WIDTH, canvas.HEIGHT))
         return "🌧 开始下雨"
     def get_description(self) -> str:
         return "start rain effect"

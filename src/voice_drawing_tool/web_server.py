@@ -4,6 +4,7 @@ import io
 import time
 import threading
 import base64
+from typing import Optional, List
 import numpy as np
 
 try:
@@ -20,6 +21,7 @@ from .commands import (
     SaveCommand, SetColorCommand, SetWidthCommand, SetBackgroundCommand,
     MoveLastCommand, ScaleLastCommand, CompositeCommand,
     MoveCursorCommand, SetCursorCommand,
+    fix_speech_text, zh_to_en,
     COLOR_MAP,
 )
 
@@ -30,7 +32,9 @@ class WebApp:
     def __init__(self, use_speech: bool = False):
         self.canvas = DrawingCanvas()
         self.parser = CommandParser()
-        self.recognizer = SpeechRecognizer() if use_speech else None
+        # 始终初始化 Whisper 模型（浏览器录音需要后端转写）
+        self.recognizer = SpeechRecognizer()
+        self._whisper_lock = threading.Lock()  # Whisper 不是线程安全的
         self.cmd_count = 0
         self.session_start = time.time()
         self.last_feedback = ""
@@ -38,6 +42,7 @@ class WebApp:
         self.running = True
         self._pending_confirm = None
         self._pending_confirm_time = 0.0
+        self._fail_count = 0
 
         self.flask_app = Flask(
             __name__,
@@ -49,8 +54,15 @@ class WebApp:
 
         self._register_routes()
         self._start_animation_loop()
-        if use_speech:
+        # 服务端麦克风监听（识别到可用 mic 自动启动；--speech 可强制启用）
+        if use_speech or (self.recognizer and self.recognizer._use_real):
             self._start_speech_loop()
+            if self.recognizer._whisper_available:
+                print("[启动] 服务端语音识别已就绪（对着麦克风说话即可）")
+            else:
+                print("[启动] 麦克风可用但 Whisper 未加载，仅使用浏览器语音识别")
+        else:
+            print("[启动] 未检测到可用麦克风，请使用浏览器语音识别或输入文字指令")
 
     # ── Routes ──────────────────────────────────────────────────────────
 
@@ -78,8 +90,8 @@ class WebApp:
                 session_duration=time.time() - self.session_start,
                 dt=dt,
             )
-            _, buf = cv2.imencode(".png", img)
-            return send_file(io.BytesIO(buf.tobytes()), mimetype="image/png")
+            _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            return send_file(io.BytesIO(buf.tobytes()), mimetype="image/jpeg")
 
         @app.route("/api/state")
         def api_state():
@@ -109,10 +121,39 @@ class WebApp:
         def api_command():
             data = request.get_json(force=True)
             text = data.get("text", "").strip()
+            candidates = data.get("candidates", [])
             if not text:
                 return jsonify({"ok": False, "feedback": "空指令"})
-            result = self._execute_command(text)
+            result = self._execute_command(text, candidates)
             return jsonify(result)
+
+        @app.route("/api/audio", methods=["POST"])
+        def api_audio():
+            """接收浏览器录制的 PCM 音频，用 Whisper 本地转写。"""
+            if not self.recognizer or not self.recognizer._whisper_available:
+                return jsonify({"ok": False, "error": "Whisper 模型未加载"})
+
+            # 从 query 参数获取采样率，默认 16000
+            sample_rate = int(request.args.get("rate", "16000"))
+            audio_data = request.get_data()
+            if len(audio_data) < 1000:
+                return jsonify({"ok": False, "error": "音频太短"})
+
+            # Whisper 转写（加锁，模型不是线程安全的）
+            # beam_size=1（贪心解码）+ initial_prompt 偏置，绘图命令精度足够
+            with self._whisper_lock:
+                results = self.recognizer._transcribe_whisper(audio_data, sample_rate)
+            if not results:
+                return jsonify({"ok": True, "texts": [], "feedback": "未识别到语音"})
+
+            texts = [r["text"] for r in results]
+            # 选出能解析的最佳候选
+            best = self._pick_best_transcript(texts)
+            if best:
+                result = self._execute_command(best, texts)
+                return jsonify({"ok": True, "texts": texts, "best": best, "result": result})
+            else:
+                return jsonify({"ok": True, "texts": texts, "best": None, "feedback": f"未识别: {texts[0][:20]}"})
 
         @app.route("/api/undo", methods=["POST"])
         def api_undo():
@@ -159,6 +200,30 @@ class WebApp:
                 download_name="drawing.png",
             )
 
+        @app.route("/api/export_svg")
+        def api_export_svg():
+            """导出 SVG 文件（画布内容嵌入为 base64 PNG）。"""
+            import base64 as b64
+            _, buf = cv2.imencode(".png", self.canvas.image)
+            png_b64 = b64.b64encode(buf.tobytes()).decode("ascii")
+            w, h = self.canvas.WIDTH, self.canvas.HEIGHT
+            svg = (
+                f'<?xml version="1.0" encoding="UTF-8"?>\n'
+                f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'xmlns:xlink="http://www.w3.org/1999/xlink" '
+                f'width="{w}" height="{h}" viewBox="0 0 {w} {h}">\n'
+                f'  <title>语音绘图 - Voice Drawing</title>\n'
+                f'  <image width="{w}" height="{h}" '
+                f'href="data:image/png;base64,{png_b64}"/>\n'
+                f'</svg>'
+            )
+            return send_file(
+                io.BytesIO(svg.encode("utf-8")),
+                mimetype="image/svg+xml",
+                as_attachment=True,
+                download_name="drawing.svg",
+            )
+
         @app.route("/api/set_color", methods=["POST"])
         def api_set_color():
             data = request.get_json(force=True)
@@ -188,35 +253,100 @@ class WebApp:
         @sio.on("command")
         def on_command(data):
             text = data.get("text", "").strip()
+            candidates = data.get("candidates", [])
             if text:
-                result = self._execute_command(text)
+                result = self._execute_command(text, candidates)
                 sio.emit("command_result", result)
 
     # ── Command execution ───────────────────────────────────────────────
 
-    def _execute_command(self, text: str) -> dict:
+    def _pick_best_transcript(self, candidates: List[str]) -> Optional[str]:
+        """遍历候选列表，返回第一个能成功解析的文本。"""
+        for t in candidates:
+            cleaned = t.strip().rstrip('。，！？；：,.!?;:')
+            if not cleaned:
+                continue
+            cmd = self.parser.parse_command(cleaned,
+                                            self.canvas.cursor_x,
+                                            self.canvas.cursor_y)
+            if cmd is not None:
+                return cleaned
+        return None
+
+    def _get_suggestion(self, text: str) -> str:
+        """为未识别的指令提供建议。"""
+        text_lower = text.lower().strip()
+        shape_suggestions = {
+            '圆': '试试: 画圆 / 红圆 / 画一个圆',
+            '圈': '试试: 画圆 / 画圆环',
+            '方': '试试: 画正方形 / 画长方形',
+            '三': '试试: 画三角形',
+            '星': '试试: 画五角星',
+            '线': '试试: 画线 / 画直线',
+            '房': '试试: 画房子',
+            '树': '试试: 画树',
+            '车': '试试: 画车',
+            '花': '试试: 画小花',
+            '太阳': '试试: 画太阳',
+            '山': '试试: 画山',
+            '红': '试试: 红圆 / 红方',
+            '蓝': '试试: 蓝圆 / 蓝方',
+            '绿': '试试: 绿圆 / 绿方',
+            '撤销': '试试: 撤销',
+            '重做': '试试: 重做',
+            '清空': '试试: 清空',
+            '保存': '试试: 保存',
+        }
+        for keyword, suggestion in shape_suggestions.items():
+            if keyword in text:
+                return suggestion
+        if text_lower.startswith('画'):
+            return '试试: 画圆 / 画方 / 画三角形 / 画房子'
+        return ""
+
+    def _execute_command(self, text: str, candidates: Optional[List[str]] = None) -> dict:
         text_lower = text.lower().strip()
         if text_lower in ("exit", "quit", "退出"):
             return {"ok": False, "feedback": "Web 模式下无法退出，请关闭浏览器"}
 
-        cmd = self.parser.parse_command(text, self.canvas.cursor_x, self.canvas.cursor_y)
+        # 如果有多个候选，选第一个能解析的
+        chosen = text
+        if candidates and len(candidates) > 1:
+            best = self._pick_best_transcript(candidates)
+            if best:
+                chosen = best
+
+        cmd = self.parser.parse_command(chosen, self.canvas.cursor_x, self.canvas.cursor_y)
         if cmd is None:
-            from .commands import fix_speech_text, zh_to_en
-            fixed = fix_speech_text(text)
+            fixed = fix_speech_text(chosen)
             en = zh_to_en(fixed)
-            self._set_feedback(f"⚠ {text[:30]} → 未识别")
-            return {"ok": False, "feedback": f"⚠ 未识别: {text[:30]}", "translated": en}
+            suggestion = self._get_suggestion(chosen)
+            self._fail_count += 1
+
+            if self._fail_count >= 3:
+                msg = f"⚠ 连续未识别，试试简单指令: 画圆 / 红圆 / 画房子"
+                self._fail_count = 0
+            elif suggestion:
+                msg = f"⚠ 未识别: {chosen[:20]}，{suggestion}"
+            else:
+                msg = f"⚠ 未识别: {chosen[:20]}"
+
+            self._set_feedback(msg)
+            return {"ok": False, "feedback": msg, "translated": en}
+
+        # 解析成功，重置失败计数
+        self._fail_count = 0
 
         if isinstance(cmd, ClearCanvasCommand):
             self.canvas.clear()
             self.cmd_count += 1
             self._set_feedback("✓ 画布已清空")
             self._broadcast_state()
-            return {"ok": True, "feedback": "✓ 画布已清空"}
+            return {"ok": True, "feedback": "✓ 画布已清空", "cmd_count": self.cmd_count}
 
         result = cmd.execute(self.canvas)
         self.cmd_count += 1
-        self.last_speech_text = text
+        self.last_speech_text = chosen
 
         if isinstance(cmd, CompositeCommand):
             self.canvas.last_command_type = CompositeCommand
@@ -234,11 +364,11 @@ class WebApp:
                         self.canvas.cursor_y = getattr(last, attr)
                         break
         elif isinstance(cmd, MoveCursorCommand):
-            self.canvas.cursor_x = max(0, min(799, self.canvas.cursor_x + cmd.dx))
-            self.canvas.cursor_y = max(0, min(599, self.canvas.cursor_y + cmd.dy))
+            self.canvas.cursor_x = max(0, min(self.canvas.WIDTH - 1, self.canvas.cursor_x + cmd.dx))
+            self.canvas.cursor_y = max(0, min(self.canvas.HEIGHT - 1, self.canvas.cursor_y + cmd.dy))
         elif isinstance(cmd, SetCursorCommand):
-            self.canvas.cursor_x = max(0, min(799, cmd.x))
-            self.canvas.cursor_y = max(0, min(599, cmd.y))
+            self.canvas.cursor_x = max(0, min(self.canvas.WIDTH - 1, cmd.x))
+            self.canvas.cursor_y = max(0, min(self.canvas.HEIGHT - 1, cmd.y))
         elif not isinstance(cmd, (
             MoveLastCommand, ScaleLastCommand,
             SetColorCommand, SetWidthCommand, SetBackgroundCommand,
@@ -257,9 +387,9 @@ class WebApp:
                     self.canvas.cursor_y = getattr(cmd, attr)
                     break
 
-        self._set_feedback(f"✓ {text[:30]} → {result}")
+        self._set_feedback(f"✓ {chosen[:30]} → {result}")
         self._broadcast_state()
-        return {"ok": True, "feedback": f"✓ {result}", "description": cmd.get_description()}
+        return {"ok": True, "feedback": f"✓ {result}", "description": cmd.get_description(), "cmd_count": self.cmd_count}
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -299,7 +429,8 @@ class WebApp:
                         session_duration=time.time() - self.session_start,
                         dt=dt,
                     )
-                    canvas_roi = preview[32:32 + 600, :]
+                    BAR_H = 44
+                    canvas_roi = preview[BAR_H:BAR_H + self.canvas.HEIGHT, :]
                     self.canvas.anim_mgr.update_and_render(dt, canvas_roi, self.canvas.image)
                     _, buf = cv2.imencode(".png", self.canvas.image)
                     b64 = base64.b64encode(buf.tobytes()).decode("ascii")
@@ -310,6 +441,7 @@ class WebApp:
         t.start()
 
     def _start_speech_loop(self):
+        """后端 Whisper 语音识别循环（仅 --speech 模式）。"""
         def loop():
             while self.running:
                 if not self.recognizer:
@@ -317,13 +449,16 @@ class WebApp:
                     continue
                 texts = self.recognizer.listen_with_alternatives()
                 if texts:
-                    best = texts[0].strip().rstrip("。，！？；：,.!?;:")
-                    self.last_speech_text = best
-                    self.socketio.emit("speech", {"text": best})
-                    cmd = self.parser.parse_command(best, self.canvas.cursor_x, self.canvas.cursor_y)
-                    if cmd:
+                    # 遍历所有候选，选第一个能解析的
+                    best = self._pick_best_transcript(texts)
+                    if best:
+                        self.last_speech_text = best
+                        self.socketio.emit("speech", {"text": best})
                         result = self._execute_command(best)
                         self.socketio.emit("command_result", result)
+                    else:
+                        self.last_speech_text = texts[0]
+                        self.socketio.emit("speech", {"text": texts[0]})
                 time.sleep(0.1)
 
         t = threading.Thread(target=loop, daemon=True)
@@ -331,7 +466,7 @@ class WebApp:
 
     def run(self, host: str = "0.0.0.0", port: int = 5000):
         print(f"\n{'=' * 50}")
-        print(f"  🎤 语音绘图工具 - Web UI")
+        print(f"  🎤 语音绘图工具")
         print(f"  http://localhost:{port}")
         print(f"{'=' * 50}\n")
         self.socketio.run(self.flask_app, host=host, port=port, allow_unsafe_werkzeug=True)

@@ -138,30 +138,136 @@ class ParticleSystem:
 
 # ─── Concrete Animations ─────────────────────────────────────────────────────
 
+class RainDrop:
+    """单个雨滴 — 带线条尾迹、深度层、风力。"""
+    __slots__ = ('x', 'y', 'vx', 'vy', 'length', 'life', 'max_life',
+                 'color', 'alpha', 'depth', 'splash_timer')
+
+    def __init__(self, x, y, vx, vy, length, life, color, alpha, depth):
+        self.x = x
+        self.y = y
+        self.vx = vx
+        self.vy = vy
+        self.length = length
+        self.life = life
+        self.max_life = life
+        self.color = color
+        self.alpha = alpha
+        self.depth = depth  # 0=最近(大亮快), 1=最远(小暗慢)
+        self.splash_timer = 0.0
+
+    def update(self, dt, wind):
+        self.x += (self.vx + wind * self.depth * 0.3) * dt
+        self.y += self.vy * dt
+        self.life -= dt
+        fade = max(0.0, self.life / self.max_life)
+        self.alpha = fade * (1.0 - self.depth * 0.5)
+        return self.life > 0
+
+
 class RainAnimation(Animation):
-    def __init__(self, width: int, loop: bool = True):
+    """真实下雨效果：雨滴线条 + 多层深度 + 底部水花 + 风力变化。"""
+
+    def __init__(self, width: int, height: int, loop: bool = True):
         super().__init__(duration=0, loop=loop)
         self._width = width
-        self._ps = ParticleSystem()
+        self._height = height
+        self._drops: List[RainDrop] = []
+        self._splashes: List[Particle] = []  # 水花粒子
         self._accum = 0.0
+        self._wind = 0.0
+        self._wind_target = 0.0
+        self._wind_timer = 0.0
+
+    def _spawn_drop(self):
+        """生成一个雨滴，随机分配深度层。"""
+        depth = np.random.uniform(0, 1)  # 0=近, 1=远
+        # 近处：大、亮、快、长尾；远处：小、暗、慢、短尾
+        speed_mult = 1.0 - depth * 0.4  # 0.6 ~ 1.0
+        size_mult = 1.0 - depth * 0.6   # 0.4 ~ 1.0
+        alpha_base = 0.9 - depth * 0.5  # 0.4 ~ 0.9
+
+        x = np.random.uniform(-20, self._width + 20)
+        y = np.random.uniform(-30, -5)
+        vx = np.random.uniform(-15, 15) * speed_mult
+        vy = np.random.uniform(350, 600) * speed_mult
+        length = np.random.uniform(12, 30) * size_mult
+        life = (self._height + 30) / abs(vy) + 0.5  # 保证落到屏幕底部
+
+        # 颜色：近处偏白蓝，远处偏灰
+        if depth < 0.3:
+            color = (210, 220, 240)  # 近：亮白蓝
+        elif depth < 0.7:
+            color = (180, 195, 220)  # 中：中蓝灰
+        else:
+            color = (150, 165, 190)  # 远：暗蓝灰
+
+        self._drops.append(RainDrop(x, y, vx, vy, length, life, color, alpha_base, depth))
+
+    def _spawn_splash(self, x, y):
+        """底部水花：2-4 个小粒子向两侧溅开。"""
+        count = np.random.randint(2, 5)
+        for _ in range(count):
+            sx = x + np.random.uniform(-3, 3)
+            sy = y + np.random.uniform(-2, 0)
+            svx = np.random.uniform(-40, 40)
+            svy = np.random.uniform(-50, -15)  # 向上溅
+            life = np.random.uniform(0.15, 0.35)
+            sz = np.random.uniform(0.5, 1.5)
+            color = (200, 215, 235)
+            self._splashes.append(Particle(sx, sy, svx, svy, life, color, sz, alpha=0.7))
 
     def update(self, dt: float, progress: float):
+        # ── 风力变化（缓慢随机漂移）──
+        self._wind_timer += dt
+        if self._wind_timer > np.random.uniform(1.5, 4.0):
+            self._wind_timer = 0.0
+            self._wind_target = np.random.uniform(-60, 60)
+        # 平滑过渡到目标风力
+        self._wind += (self._wind_target - self._wind) * min(1.0, dt * 2.0)
+
+        # ── 生成雨滴（密度随时间增加到稳态）──
         self._accum += dt
-        if self._accum > 0.05:
-            self._accum = 0
-            x = np.random.uniform(0, self._width)
-            self._ps.emit(x, -5, 3, {
-                'vx_range': (-10, 10),
-                'vy_range': (250, 450),
-                'life_range': (1.0, 2.5),
-                'size_range': (1, 2),
-                'colors': [(200, 210, 230), (180, 200, 220)],
-                'speed': 1.0,
-            })
-        self._ps.update(dt)
+        spawn_interval = 0.012  # ~80 个/秒
+        while self._accum >= spawn_interval:
+            self._accum -= spawn_interval
+            self._spawn_drop()
+
+        # ── 更新雨滴 ──
+        alive = []
+        for d in self._drops:
+            if d.update(dt, self._wind):
+                alive.append(d)
+            else:
+                # 落到底部或超出边界 → 生成水花
+                if d.y >= self._height - 5 and abs(d.vx) < 100:
+                    self._spawn_splash(d.x, self._height - 2)
+        self._drops = alive
+
+        # ── 更新水花 ──
+        self._splashes = [p for p in self._splashes if p.update(dt)]
 
     def render(self, img: np.ndarray, progress: float):
-        self._ps.render(img)
+        h, w = img.shape[:2]
+
+        # ── 渲染雨滴（线条）──
+        for d in self._drops:
+            xi, yi = int(d.x), int(d.y)
+            if xi < -10 or xi >= w + 10 or yi < -10 or yi >= h + 10:
+                continue
+            # 雨滴尾迹：从当前位置向上画一条线
+            tail_x = d.x - d.vx * d.length / abs(d.vy) if abs(d.vy) > 1 else d.x
+            tail_y = d.y - d.length
+            col = tuple(int(c * d.alpha) for c in d.color)
+            thickness = max(1, int(1.5 * (1.0 - d.depth * 0.5)))
+            cv2.line(img, (int(tail_x), int(tail_y)), (xi, yi), col, thickness, cv2.LINE_AA)
+
+        # ── 渲染水花（小圆点）──
+        for p in self._splashes:
+            px, py = int(p.x), int(p.y)
+            if 0 <= px < w and 0 <= py < h:
+                col = tuple(int(c * p.alpha) for c in p.color)
+                cv2.circle(img, (px, py), max(1, int(p.size)), col, -1, cv2.LINE_AA)
 
 
 class GrowFlowerAnimation(Animation):

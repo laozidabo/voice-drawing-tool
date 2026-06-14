@@ -6,3 +6,6 @@ build/
 .venv/
 *.swp
 demo_output.png
+**/.codewhale/*
+!**/.codewhale/constitution.json
+.deepseek/
