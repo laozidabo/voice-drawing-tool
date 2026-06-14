@@ -1227,14 +1227,14 @@ class VoiceDrawingApp:
             if fixed != text:
                 print(f"  → 纠错: {fixed}")
             print(f"  → 翻译: {en}")
-            
+
             # Provide helpful suggestions based on common mistakes
             suggestion = self._get_suggestion(text)
             if suggestion:
                 self._set_feedback(f"⚠ {text[:40]} → 未识别. {suggestion}", is_error=True)
             else:
                 self._set_feedback(f"⚠ {text[:32]} → 未识别", is_error=True)
-            
+
             self._unrecognized_count += 1
             if self._unrecognized_count >= 3:
                 msg = "试试简单指令: 红圆 / 画房子 / 撤销 / 帮助"
@@ -1246,6 +1246,12 @@ class VoiceDrawingApp:
             return
         self._unrecognized_count = 0
         self._last_command_text = text
+        # 非确认类命令执行时，清除待确认状态
+        from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, RepeatLastWithVariationCommand
+        if not isinstance(cmd, (ClearCanvasCommand, UndoCommand, ConfirmCommand)):
+            if self._pending_confirm:
+                self._pending_confirm = None
+                self._pending_confirm_time = 0.0
         # Confirmation for destructive commands — voice-based
         from .commands import ClearCanvasCommand, UndoCommand, ConfirmCommand, RepeatLastWithVariationCommand
         if isinstance(cmd, ClearCanvasCommand):

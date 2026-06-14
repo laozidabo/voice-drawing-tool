@@ -17,7 +17,8 @@ def main():
 
     from .core import VoiceDrawingApp
     gui = None if "--no-gui" not in sys.argv else False
-    app = VoiceDrawingApp(use_speech=True, gui=gui)
+    use_speech = "--speech" in sys.argv or ("--no-gui" not in sys.argv and "--no-speech" not in sys.argv)
+    app = VoiceDrawingApp(use_speech=use_speech, gui=gui)
     app.running = True
 
     print("=" * 50)
