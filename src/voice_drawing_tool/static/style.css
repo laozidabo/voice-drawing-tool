@@ -1,0 +1,322 @@
+/* ── Reset & Base ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f0f1a;
+  --surface:   #1a1a2e;
+  --card:      #1e2235;
+  --border:    #2a2d45;
+  --text:      #e0e0e8;
+  --text-dim:  #8888a0;
+  --accent:    #4f6ef7;
+  --accent-h:  #6b85ff;
+  --green:     #34d399;
+  --red:       #f87171;
+  --yellow:    #fbbf24;
+  --radius:    10px;
+  --shadow:    0 2px 12px rgba(0,0,0,.4);
+}
+
+body {
+  font-family: -apple-system, "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top Bar ─────────────────────────────────────────────────── */
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.top-left { display: flex; align-items: center; gap: 10px; }
+.top-left h1 { font-size: 16px; font-weight: 600; }
+.logo { font-size: 20px; }
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(52,211,153,.15);
+  color: var(--green);
+}
+.badge.offline { background: rgba(248,113,113,.15); color: var(--red); }
+.top-right { display: flex; gap: 16px; }
+.stat { display: flex; gap: 4px; font-size: 12px; }
+.stat .label { color: var(--text-dim); }
+
+/* ── Layout ──────────────────────────────────────────────────── */
+.layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.panel {
+  width: 220px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  padding: 10px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.right-panel {
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Cards ───────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.card h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 8px;
+}
+
+/* ── Shape Buttons ───────────────────────────────────────────── */
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.shape-btn {
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shape-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.08);
+}
+
+/* ── Color Buttons ───────────────────────────────────────────── */
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.color-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--c);
+  cursor: pointer;
+  transition: all .15s;
+}
+.color-btn:hover { transform: scale(1.15); }
+.color-btn.active { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+
+/* ── Slider ──────────────────────────────────────────────────── */
+.slider {
+  width: 100%;
+  -webkit-appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+/* ── Action Buttons ──────────────────────────────────────────── */
+.btn-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.btn-row:last-child { margin-bottom: 0; }
+.action-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.action-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.stop-btn { background: rgba(248,113,113,.1); border-color: rgba(248,113,113,.3); color: var(--red); }
+.stop-btn:hover { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* ── Position Grid ───────────────────────────────────────────── */
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.pos-btn {
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pos-btn:hover { background: var(--accent); border-color: var(--accent); }
+
+/* ── Canvas Area ─────────────────────────────────────────────── */
+.canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  min-width: 0;
+}
+.canvas-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+#canvas-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+/* ── Toast ───────────────────────────────────────────────────── */
+.toast {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(30,34,53,.92);
+  border: 1px solid var(--border);
+  color: var(--text);
+  backdrop-filter: blur(8px);
+  transition: opacity .3s, transform .3s;
+  pointer-events: none;
+  z-index: 10;
+}
+.toast.hidden { opacity: 0; transform: translateX(-50%) translateY(8px); }
+.toast.error { border-color: rgba(248,113,113,.4); color: var(--red); }
+.toast.success { border-color: rgba(52,211,153,.4); color: var(--green); }
+
+/* ── Command Bar ─────────────────────────────────────────────── */
+.cmd-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+#cmd-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .2s;
+}
+#cmd-input:focus { border-color: var(--accent); }
+#cmd-input::placeholder { color: var(--text-dim); }
+.send-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.send-btn:hover { background: var(--accent-h); }
+
+/* ── Command History ─────────────────────────────────────────── */
+.cmd-history {
+  max-height: 180px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.cmd-history::-webkit-scrollbar { width: 3px; }
+.cmd-history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.history-item {
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-dim);
+  transition: all .1s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-item:hover { background: var(--surface); color: var(--text); }
+.history-item.success { color: var(--green); }
+.history-item.error { color: var(--red); }
+
+/* ── Help Card ───────────────────────────────────────────────── */
+.help-hint p { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+.help-hint .dim { font-size: 11px; color: #666; }
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .panel { width: 180px; }
+}
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .panel {
+    width: 100%;
+    flex-direction: row;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .card { min-width: 160px; margin-bottom: 0; }
+  .right-panel { border-left: none; border-top: 1px solid var(--border); }
+}

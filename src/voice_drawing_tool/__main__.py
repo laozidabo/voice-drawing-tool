@@ -1,10 +1,21 @@
 import sys
 import threading
 import time as _time
-from .core import VoiceDrawingApp
 
 
 def main():
+    if "--web" in sys.argv:
+        from .web_server import WebApp
+        use_speech = "--speech" in sys.argv
+        app = WebApp(use_speech=use_speech)
+        port = 5000
+        for i, arg in enumerate(sys.argv):
+            if arg == "--port" and i + 1 < len(sys.argv):
+                port = int(sys.argv[i + 1])
+        app.run(port=port)
+        return
+
+    from .core import VoiceDrawingApp
     gui = None if "--no-gui" not in sys.argv else False
     app = VoiceDrawingApp(use_speech=True, gui=gui)
     app.running = True

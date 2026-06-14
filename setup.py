@@ -14,6 +14,8 @@ setup(
         "Pillow",
         "pypinyin",
         "faster-whisper",
+        "flask>=3.0.0",
+        "flask-socketio>=5.3.0",
     ],
     extras_require={
         "speech": [
