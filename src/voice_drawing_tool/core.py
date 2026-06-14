@@ -130,10 +130,10 @@ class DrawingCanvas:
     def _cache_static_ui(self):
         if self._cached_top_bar is not None:
             return
-        BAR_H = 28
+        BAR_H = 32
         total_w = self.WIDTH
-        BAR_BG = (30, 25, 25)
-        ACCENT_LINE = (50, 45, 45)
+        BAR_BG = (35, 30, 30)
+        ACCENT_LINE = (60, 55, 55)
 
         self._cached_top_bar = np.full((BAR_H, total_w, 3), BAR_BG, dtype=np.uint8)
         cv2.line(self._cached_top_bar, (0, BAR_H - 1), (total_w, BAR_H - 1), ACCENT_LINE, 1)
@@ -142,25 +142,15 @@ class DrawingCanvas:
         cv2.line(self._cached_bottom_bar, (0, 0), (total_w, 0), ACCENT_LINE, 1)
 
         grid = np.zeros((self.HEIGHT, total_w, 3), dtype=np.uint8)
-        grid_col = (218, 222, 226)
+        grid_col = (200, 205, 210)
         cell_w = self.WIDTH // 5
         cell_h = self.HEIGHT // 5
         for row in range(1, 6):
             gy = row * cell_h
-            cv2.line(grid, (0, gy), (total_w, gy), grid_col, 1)
+            cv2.line(grid, (0, gy), (total_w, gy), grid_col, 1, cv2.LINE_AA)
         for col in range(1, 6):
             gx = col * cell_w
-            cv2.line(grid, (gx, 0), (gx, self.HEIGHT), grid_col, 1)
-        dot_col = (195, 200, 205)
-        for row in range(1, 6):
-            gy = row * cell_h
-            for col in range(1, 6):
-                gx = col * cell_w
-                cv2.circle(grid, (gx, gy), 3, dot_col, -1)
-
-        label_col = (175, 180, 185)
-        cv2.rectangle(grid, (1, 1), (total_w - 2, self.HEIGHT - 2), (195, 200, 205), 1)
-        cv2.rectangle(grid, (0, 0), (total_w - 1, self.HEIGHT - 1), (185, 190, 195), 1)
+            cv2.line(grid, (gx, 0), (gx, self.HEIGHT), grid_col, 1, cv2.LINE_AA)
         self._cached_grid = grid
 
     def _save_state(self):
@@ -339,8 +329,7 @@ class DrawingCanvas:
         BAR_H = 28
         total_h = self.HEIGHT + BAR_H * 2
         total_w = self.WIDTH
-        BAR_TEXT = (245, 240, 240)
-        BAR_TEXT_DIM = (135, 125, 120)
+        BAR_TEXT_DIM = (150, 140, 135)
         v = np.full((total_h, total_w, 3), (240, 240, 240), dtype=np.uint8)
 
         v[:BAR_H, :] = self._cached_top_bar
@@ -350,16 +339,14 @@ class DrawingCanvas:
         if self._cached_grid is not None:
             canvas_roi = v[BAR_H:BAR_H + self.HEIGHT, :]
             grid = self._cached_grid
-            line_mask = np.all(grid > 190, axis=2)
-            label_mask = np.any(grid > 40, axis=2) & ~line_mask
-            blended = cv2.addWeighted(canvas_roi, 0.3, grid, 0.7, 0)
-            canvas_roi[line_mask] = blended[line_mask]
-            canvas_roi[label_mask] = grid[label_mask]
+            mask = np.any(grid > 0, axis=2)
+            blended = cv2.addWeighted(canvas_roi, 0.85, grid, 0.15, 0)
+            canvas_roi[mask] = blended[mask]
 
-        # --- Top bar (28px) ---
-        ty = 8  # text y-center for 13-14px font in 28px bar
-        put_chinese_text(v, "语音绘图", (10, ty), 14, BAR_TEXT)
-        sp_x = 110
+        # --- Top bar ---
+        ty = 9
+        put_chinese_text(v, "语音绘图", (12, ty), 16, (240, 235, 235))
+        sp_x = 120
         last_speech = getattr(self, '_last_speech_text', '')
         if last_speech:
             speech_str = f"🎤 {last_speech}"
@@ -370,39 +357,32 @@ class DrawingCanvas:
                 if w > max_w:
                     speech_str = speech_str[:i] + "…"
                     break
-            put_chinese_text(v, speech_str, (sp_x, ty), 13, (120, 200, 255))
+            put_chinese_text(v, speech_str, (sp_x, ty), 14, (120, 200, 255))
 
-        # Right cluster: color swatch | name | width | coords | shapes
         put_chinese_text(v, f"({int(self.cursor_x)},{int(self.cursor_y)})",
-                        (total_w - 330, ty), 12, BAR_TEXT_DIM)
-        put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 260, ty), 12, BAR_TEXT_DIM)
+                        (total_w - 330, ty), 13, BAR_TEXT_DIM)
+        put_chinese_text(v, f"形状:{self._shape_count}", (total_w - 250, ty), 13, BAR_TEXT_DIM)
 
-
-
-        # --- Bottom bar (28px) ---
+        # --- Bottom bar ---
         by = total_h - BAR_H
-        bty = by + 8  # text y in bottom bar
+        bty = by + 9
 
-        # Status indicator: 3px left strip
         cv2.rectangle(v, (0, by), (3, total_h), (50, 200, 80) if is_listening else BAR_TEXT_DIM, -1)
-        # Status dot + text
-        dot_x, dot_cy = 16, by + BAR_H // 2
+        dot_x, dot_cy = 18, by + BAR_H // 2
         if is_listening:
             cv2.circle(v, (dot_x, dot_cy), 6, (40, 180, 80), -1, cv2.LINE_AA)
             cv2.circle(v, (dot_x, dot_cy), 6, (80, 220, 110), 2, cv2.LINE_AA)
-            put_chinese_text(v, "聆听中", (dot_x + 14, bty), 13, (100, 220, 130))
+            put_chinese_text(v, "聆听中", (dot_x + 16, bty), 14, (100, 220, 130))
         else:
             cv2.circle(v, (dot_x, dot_cy), 4, BAR_TEXT_DIM, -1, cv2.LINE_AA)
-            put_chinese_text(v, "待命", (dot_x + 12, bty), 13, BAR_TEXT_DIM)
+            put_chinese_text(v, "待命", (dot_x + 14, bty), 14, BAR_TEXT_DIM)
 
-        # Feedback text (centered region, before stats)
-        fb_x, fb_max = 110, total_w - 330
+        fb_x, fb_max = 120, total_w - 330
         if feedback_text:
             fb = feedback_text[:60]
             fb_w = 8 + sum(18 if ord(ch) > 127 else 9 for ch in fb)
             if fb_w > fb_max - fb_x:
                 fb_w = fb_max - fb_x
-            fb_y, fb_h = by + 5, BAR_H - 10
             fb_col = (230, 200, 100)
             if feedback_text.startswith('⚠'):
                 fb_col = (255, 140, 100)
@@ -412,16 +392,15 @@ class DrawingCanvas:
                 fb_col = (80, 210, 110)
             elif feedback_text.startswith('💡'):
                 fb_col = (180, 220, 255)
-            put_chinese_text(v, fb, (fb_x, bty), 13, fb_col)
+            put_chinese_text(v, fb, (fb_x, bty), 14, fb_col)
 
-        # Right: cmd count + duration
         stats_x = total_w - 310
-        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, bty), 12, BAR_TEXT_DIM)
+        put_chinese_text(v, f"指令:{cmd_count}", (stats_x + 2, bty), 13, BAR_TEXT_DIM)
         dur = int(session_duration)
         mm, ss = divmod(dur, 60)
         hh, mm = divmod(mm, 60)
         dur_str = f"{hh}:{mm:02d}:{ss:02d}" if hh > 0 else f"{mm:02d}:{ss:02d}"
-        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, bty), 12, BAR_TEXT_DIM)
+        put_chinese_text(v, f"时长:{dur_str}", (stats_x + 80, bty), 13, BAR_TEXT_DIM)
 
         cx, cy_ = int(self.cursor_x), int(self.cursor_y)
         canvas_cy = cy_ + BAR_H
@@ -458,7 +437,7 @@ class DrawingCanvas:
         _arm(0, 0, white)
         cv2.circle(v, (cx, canvas_cy), 2, self.pen_color, -1, cv2.LINE_AA)
         coord_txt = f"({cx},{cy_})"
-        put_chinese_text(v, coord_txt, (cx + 12, canvas_cy + 16), 11, white)
+        put_chinese_text(v, coord_txt, (cx + 14, canvas_cy + 18), 12, white)
 
         canvas_roi = v[BAR_H:BAR_H + self.HEIGHT, :]
         self.anim_mgr.update_and_render(dt, canvas_roi, self.image)
@@ -917,7 +896,7 @@ class VoiceDrawingApp:
 
         if self.gui:
             cv2.namedWindow(self.WINDOW_NAME, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(self.WINDOW_NAME, 800, 668)
+            cv2.resizeWindow(self.WINDOW_NAME, 800, 664)
             print("[GUI] 绘图窗口已创建")
             print("\n" + "="*60)
             print("  🎤 语音绘图工具已启动!")
@@ -983,16 +962,14 @@ class VoiceDrawingApp:
         """Draw welcome guide overlay on the canvas."""
         h, w = img.shape[:2]
 
-        # Semi-transparent overlay
         overlay = img.copy()
-        cv2.rectangle(overlay, (50, 100), (w-50, h-100), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)
+        cv2.rectangle(overlay, (60, 80), (w - 60, h - 80), (20, 18, 18), -1)
+        cv2.addWeighted(overlay, 0.8, img, 0.2, 0, img)
 
-        # Welcome text
-        y = 150
-        put_chinese_text(img, "🎤 语音绘图快速指南", (100, y), 28, (255, 255, 255))
+        y = 120
+        put_chinese_text(img, "🎤 语音绘图快速指南", (120, y), 26, (255, 255, 255))
 
-        y += 50
+        y += 55
         guides = [
             "直接说出指令即可绘图",
             "",
@@ -1009,12 +986,11 @@ class VoiceDrawingApp:
 
         for line in guides:
             if line == "":
-                y += 20
+                y += 22
                 continue
-            put_chinese_text(img, line, (120, y), 18, (200, 200, 200))
-            y += 30
+            put_chinese_text(img, line, (140, y), 18, (210, 210, 215))
+            y += 32
 
-        # Countdown
         remaining = int(self._welcome_expire - time.time())
         if remaining > 0:
             put_chinese_text(img, f"此指南将在 {remaining} 秒后消失...",
@@ -1027,29 +1003,27 @@ class VoiceDrawingApp:
         """Draw help overlay on the canvas."""
         h, w = img.shape[:2]
 
-        # Semi-transparent overlay
         overlay = img.copy()
-        cv2.rectangle(overlay, (30, 50), (w - 30, h - 50), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.75, img, 0.25, 0, img)
+        cv2.rectangle(overlay, (40, 40), (w - 40, h - 40), (20, 18, 18), -1)
+        cv2.addWeighted(overlay, 0.8, img, 0.2, 0, img)
 
-        y = 80
+        y = 70
         for line in HELP_TEXT.splitlines():
             if line == "":
-                y += 16
+                y += 14
                 continue
-            # Headers in brighter color
             if line.startswith("【") or line.startswith("🎤"):
-                put_chinese_text(img, line, (60, y), 20, (255, 255, 255))
+                put_chinese_text(img, line, (70, y), 20, (255, 255, 255))
             elif line.startswith("💡"):
-                put_chinese_text(img, line, (60, y), 16, (180, 220, 255))
+                put_chinese_text(img, line, (70, y), 16, (180, 220, 255))
             else:
-                put_chinese_text(img, line, (60, y), 16, (190, 190, 195))
+                put_chinese_text(img, line, (70, y), 16, (200, 200, 205))
             y += 26
-            if y > h - 80:
+            if y > h - 60:
                 break
 
         put_chinese_text(img, "按任意键或说出指令关闭帮助",
-                        (w // 2 - 170, h - 70), 14, (150, 150, 150))
+                        (w // 2 - 170, h - 50), 14, (160, 160, 165))
 
     def _draw_clear_confirm_overlay(self, img):
         """Draw clear confirmation overlay on the canvas."""
